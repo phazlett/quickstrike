@@ -1,10 +1,23 @@
+const CONFIG = {
+  sandbox: {
+    baseUrl: 'https://api.cert.tastyworks.com',
+    tokenEndpoint: 'https://api.cert.tastyworks.com/oauth/token',
+    authorizeUrl: 'https://cert-my.staging-tasty.works/auth.html',
+  },
+  production: {
+    baseUrl: 'https://api.tastyworks.com',
+    tokenEndpoint: 'https://api.tastyworks.com/oauth/token',
+    authorizeUrl: 'https://my.tastytrade.com/auth.html',
+  }
+};
+
 let tokenResponse = null;
 let stagedCall = null;
 let stagedPut = null;
 
 const getConfig = () => CONFIG[useSandbox ? 'sandbox' : 'production'];
 
-// ── DOM refs ─────────────────────────────────────────────────────────────────
+// DOM refs ---------------------------------------------------------------
 const appHeader = document.getElementById('app-header');
 const envBadge = document.getElementById('env-badge');
 const btnLogout = document.getElementById('btn-logout');
@@ -37,7 +50,7 @@ const putOrderResponse = document.getElementById('put-order-response');
 const callActionEl = document.getElementById('call-action');
 const putActionEl = document.getElementById('put-action');
 
-// ── On page load: check if returning from OAuth redirect ──────────────────────
+// On page load: check if returning from OAuth redirect -------------------
 
 window.addEventListener('load', async () => {
 
@@ -50,7 +63,7 @@ window.addEventListener('load', async () => {
   }
 });
 
-// ── On page refresh: check if returning from OAuth redirect ──────────────────────
+// On page refresh: check if returning from OAuth redirect ---------------------
 
 window.addEventListener('load', async () => {
   const params = new URLSearchParams(window.location.search);
@@ -71,7 +84,7 @@ window.addEventListener('load', async () => {
   await showAuthenticated();
 });
 
-// ── PKCE Helpers ──────────────────────────────────────────────────────────────
+// PKCE Helpers ---------------------------------------------------------------
 function generateRandomString(length = 64) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
   const array = new Uint8Array(length);
@@ -88,7 +101,7 @@ async function generateCodeChallenge(verifier) {
     .replace(/=/g, '');
 }
 
-// ── Step 1: Redirect to TastyTrade login ──────────────────────────────────────
+// Step 1: Redirect to TastyTrade login --------------------------------------
 btnConnect.addEventListener('click', async () => {
 
   const codeVerifier = generateRandomString(64);
@@ -111,7 +124,7 @@ btnConnect.addEventListener('click', async () => {
   window.location.href = authUrl.toString();
 });
 
-// ── Step 2: Exchange authorization code for access token ──────────────────────
+// Step 2: Exchange authorization code for access token ----------------------
 async function handleOAuthCallback(code, returnedState) {
 
   const codeVerifier = localStorage.getItem('pkce_verifier');
@@ -232,7 +245,7 @@ btnLogout.addEventListener('click', () => {
   orderResponse.textContent = '';
 });
 
-// ── Load accounts ─────────────────────────────────────────────────────────────
+// Load accounts ---------------------------------------------------------------
 async function loadAccounts() {
   const resp = await apiGet('/customers/me/accounts');
   const accounts = resp?.data?.items ?? [];
@@ -247,7 +260,7 @@ async function loadAccounts() {
   });
 }
 
-// ── Submit order ──────────────────────────────────────────────────────────────
+// Submit order ---------------------------------------------------------------
 async function submitOrder(staged, side, dryRun = false) {
   const quantity = parseInt(document.getElementById('quantity').value);
   const accountNumber = accountSelect.value;
@@ -292,8 +305,7 @@ async function submitOrder(staged, side, dryRun = false) {
   }
 }
 
-// ── Option Chain ──────────────────────────────────────────────────────────────
-// ── Add this function (replaces the btnLoadChain click handler body) ──────────
+// Option Chain ---------------------------------------------------------------
 async function loadChain(ticker) {
   if (!ticker) return;
 
@@ -351,7 +363,7 @@ async function loadChain(ticker) {
   }
 }
 
-// ── Auto-load triggers ────────────────────────────────────────────────────────
+// Auto-load triggers ---------------------------------------------------------
 let chainLoading = false;
 
 let currentSymbol = 'SPY';
@@ -387,7 +399,7 @@ function renderChain(expirations) {
     const dteLabel = dte === 0 ? '0 DTE' : dte === 1 ? '1 DTE' : `${dte} DTE`;
     const strikes = exp['strikes'] ?? [];
 
-    // ── Collapsible header ──
+    // Collapsible header ---------------------------------------------------
     const header = document.createElement('div');
     header.className = 'expiry-header';
     header.innerHTML = `
@@ -398,7 +410,7 @@ function renderChain(expirations) {
       <span class="expiry-dte">${dteLabel}</span>
     `;
 
-    // ── Collapsible body ──
+    // Collapsible body ---------------------------------------------------
     const body = document.createElement('div');
     body.className = 'expiry-body';
 
@@ -602,7 +614,7 @@ function selectSymbol(symbol, side, direction, strikePrice, el) {
   }
 }
 
-// ── Order quantity listeners ──────────────────────────────────────────────────
+// Order quantity listeners ---------------------------------------------------
 document.getElementById('quantity').addEventListener('change', () => {
   if (stagedCall) {
     const el = document.querySelector('.direction-btn.call-selected');
@@ -620,13 +632,13 @@ document.getElementById('quantity').addEventListener('change', () => {
   }
 });
 
-// ── Order button listeners ────────────────────────────────────────────────────
+// Order button listeners ---------------------------------------------------
 btnDryRunCall.addEventListener('click', () => submitOrder(stagedCall, 'call', true));
 btnSubmitCall.addEventListener('click', () => submitOrder(stagedCall, 'call', false));
 btnDryRunPut.addEventListener('click', () => submitOrder(stagedPut, 'put', true));
 btnSubmitPut.addEventListener('click', () => submitOrder(stagedPut, 'put', false));
 
-// ── API Helpers ───────────────────────────────────────────────────────────────
+// API Helpers ---------------------------------------------------------------
 async function apiGet(path) {
   await ensureValidToken();
   const resp = await fetch(`${getConfig().baseUrl}${path}`, {
@@ -672,7 +684,7 @@ async function apiPost(path, body) {
   return resp.json();
 }
 
-// ── Utility ───────────────────────────────────────────────────────────────────
+// Utility -------------------------------------------------------------------
 function setStatus(el, message, type) {
   el.textContent = message;
   el.className = `status ${type}`;
