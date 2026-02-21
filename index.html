@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuickStrike for TastyTrade</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:,">
+</head>
+
+<body>
+  <input type="hidden" id="option-symbol" />
+
+  <!-- ── HEADER ── (hidden until authenticated) -->
+  <header id="app-header" class="hidden">
+    <div class="header-left">
+      <div class="header-inputs">
+        <div class="symbol-buttons">
+          <button class="symbol-btn active" data-symbol="SPY">SPY</button>
+          <button class="symbol-btn" data-symbol="XSP">XSP</button>
+        </div>
+        <select id="quantity">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="5">5</option>
+          <option value="10">10</option>
+          <option value="15">15</option>
+          <option value="20">20</option>
+          <option value="30">30</option>
+          <option value="40">40</option>
+          <option value="50">50</option>
+        </select>
+      </div>
+      <div id="chain-status" class="status"></div>
+    </div>
+    <div class="header-right">
+      <button id="btn-logout">Logout</button>
+      <div id="env-badge"></div>
+    </div>
+  </header>
+
+  <!-- ── CONFIGURATION ── -->
+  <section id="config-section">
+    <h2>QuickStrike for TastyTrade</h2>
+    <button id="btn-connect">Login with TastyTrade</button>
+    <div id="auth-status" class="status"></div>
+  </section>
+
+  <!-- ── TRADING ── (hidden until authenticated) -->
+  <section id="trading-section" class="hidden">
+
+    <div class="form-row">
+      <label>Account</label>
+      <select id="account-select"></select>
+    </div>
+
+    <!-- ── Option Chain Display ── -->
+    <div id="chain-section" class="hidden">
+      <div id="expiry-tabs" class="tab-row"></div>
+      <div id="chain-grid" class="chain-grid">
+        <div class="chain-header">
+          <span>Call</span>
+          <span>Strike</span>
+          <span>Put</span>
+        </div>
+        <div id="chain-rows"></div>
+      </div>
+    </div>
+
+    <!-- ── Order Panel ── -->
+    <div id="order-section">
+      <h2>Staged Orders</h2>
+
+      <div class="staged-orders">
+
+        <!-- Call Order -->
+        <div class="staged-card" id="call-card">
+          <div class="staged-card-header call-header">Call</div>
+          <div class="staged-symbol" id="call-symbol">No call selected</div>
+          <div class="staged-action" id="call-action"></div>
+          <div class="button-row">
+            <button class="btn-disabled" id="btn-dry-run-call" disabled>Dry Run</button>
+            <button class="btn-disabled" id="btn-submit-call" disabled>Submit</button>
+          </div>
+          <div id="call-order-status" class="status"></div>
+          <pre id="call-order-response" class="hidden"></pre>
+        </div>
+
+        <!-- Put Order -->
+        <div class="staged-card" id="put-card">
+          <div class="staged-card-header put-header">Put</div>
+          <div class="staged-symbol" id="put-symbol">No put selected</div>
+          <div class="staged-action" id="put-action"></div>
+          <div class="button-row">
+            <button class="btn-disabled" id="btn-dry-run-put" disabled>Dry Run</button>
+            <button class="btn-disabled" id="btn-submit-put" disabled>Submit</button>
+          </div>
+          <div id="put-order-status" class="status"></div>
+          <pre id="put-order-response" class="hidden"></pre>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
