@@ -24,6 +24,7 @@
           <option value="1">1</option>
           <option value="2">2</option>
           <option value="3">3</option>
+          <option value="4">4</option>
           <option value="5">5</option>
           <option value="10">10</option>
           <option value="15">15</option>
@@ -32,12 +33,16 @@
           <option value="40">40</option>
           <option value="50">50</option>
         </select>
+        <select id="account-select"></select>
+      </div>
+      <div class="live-price-wrap">
+        <div id="live-price" class="live-price"></div>
       </div>
       <div id="chain-status" class="status"></div>
     </div>
     <div class="header-right">
       <button id="btn-logout">Logout</button>
-      <div id="env-badge"></div>
+      <div id="live-connection" class="live-connection disconnected">DISCONNECTED</div>
     </div>
   </header>
 
@@ -51,14 +56,8 @@
   <!-- ── TRADING ── (hidden until authenticated) -->
   <section id="trading-section" class="hidden">
 
-    <div class="form-row">
-      <label>Account</label>
-      <select id="account-select"></select>
-    </div>
-
     <!-- ── Option Chain Display ── -->
     <div id="chain-section" class="hidden">
-      <div id="expiry-tabs" class="tab-row"></div>
       <div id="chain-grid" class="chain-grid">
         <div class="chain-header">
           <span>Call</span>
@@ -72,6 +71,7 @@
     <!-- ── Order Panel ── -->
     <div id="order-section">
       <h2>Staged Orders</h2>
+      <div id="env-badge"></div>
 
       <div class="staged-orders">
 
@@ -80,6 +80,10 @@
           <div class="staged-card-header call-header">Call</div>
           <div class="staged-symbol" id="call-symbol">No call selected</div>
           <div class="staged-action" id="call-action"></div>
+          <div class="bp-impact-row">
+            <span class="bp-label">Estimated BPR</span>
+            <span class="bp-value" id="call-bp-reduction">--</span>
+          </div>
           <div class="button-row">
             <button class="btn-disabled" id="btn-dry-run-call" disabled>Dry Run</button>
             <button class="btn-disabled" id="btn-submit-call" disabled>Submit</button>
@@ -93,6 +97,10 @@
           <div class="staged-card-header put-header">Put</div>
           <div class="staged-symbol" id="put-symbol">No put selected</div>
           <div class="staged-action" id="put-action"></div>
+          <div class="bp-impact-row">
+            <span class="bp-label">Estimated BPR</span>
+            <span class="bp-value" id="put-bp-reduction">--</span>
+          </div>
           <div class="button-row">
             <button class="btn-disabled" id="btn-dry-run-put" disabled>Dry Run</button>
             <button class="btn-disabled" id="btn-submit-put" disabled>Submit</button>

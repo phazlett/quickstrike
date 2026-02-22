@@ -33,7 +33,6 @@ const orderResponse = document.getElementById('order-response');
 const tickerInput = document.getElementById('ticker-input');
 const chainStatus = document.getElementById('chain-status');
 const chainSection = document.getElementById('chain-section');
-const expiryTabs = document.getElementById('expiry-tabs');
 const chainRows = document.getElementById('chain-rows');
 const selectedSymbolEl = document.getElementById('selected-symbol');
 const orderSection = document.getElementById('order-section');
@@ -49,19 +48,32 @@ const callOrderResponse = document.getElementById('call-order-response');
 const putOrderResponse = document.getElementById('put-order-response');
 const callActionEl = document.getElementById('call-action');
 const putActionEl = document.getElementById('put-action');
+const callBpReductionEl = document.getElementById('call-bp-reduction');
+const putBpReductionEl = document.getElementById('put-bp-reduction');
+const livePriceEl = document.getElementById('live-price');
+const liveConnectionEl = document.getElementById('live-connection');
 
-// On page load: check if returning from OAuth redirect -------------------
-
-window.addEventListener('load', async () => {
-
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
-  const state = params.get('state');
-
-  if (code) {
-    await handleOAuthCallback(code, state);
-  }
-});
+// Market data (DxLink) state -------------------------------------------------
+const DXLINK_CONTROL_CHANNEL = 0;
+const DXLINK_FEED_CHANNEL = 3;
+let marketSocket = null;
+let marketSocketOpen = false;
+let marketAuthorized = false;
+let marketFeedReady = false;
+let marketKeepaliveTimer = null;
+let marketReconnectInFlight = null;
+let marketQuoteToken = null;
+let marketDxlinkUrl = null;
+let marketAutoReconnectTimer = null;
+let marketAutoReconnectAttempts = 0;
+let selectedStreamerSymbol = null;
+let symbolMapCache = new Map();
+let currentLiveQuotePrice = null;
+let hasAutoScrolledToLiveStrike = false;
+let optionStreamerByOptionSymbol = new Map();
+let optionQuoteByStreamerSymbol = new Map();
+let optionQuoteSubscriptions = new Set();
+let bpEstimateRequestId = 0;
 
 // On page refresh: check if returning from OAuth redirect ---------------------
 
@@ -75,10 +87,19 @@ window.addEventListener('load', async () => {
     return;
   }
 
-  tokenResponse = JSON.parse(localStorage.getItem('token_response'));
+  try {
+    tokenResponse = JSON.parse(localStorage.getItem('token_response'));
+  } catch {
+    tokenResponse = null;
+    localStorage.removeItem('token_response');
+  }
+
   if (!tokenResponse) {
     return;
   }
+
+  tokenResponse = normalizeTokenResponse(tokenResponse);
+  localStorage.setItem('token_response', JSON.stringify(tokenResponse));
 
   await loadAccounts();
   await showAuthenticated();
@@ -99,6 +120,27 @@ async function generateCodeChallenge(verifier) {
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=/g, '');
+}
+
+function normalizeTokenResponse(data) {
+  const expiresInSeconds = Number.parseInt(data?.expires_in, 10);
+  const expiresIn = Number.isFinite(expiresInSeconds) ? expiresInSeconds : 0;
+
+  if (Number.isFinite(data?.expires_at)) {
+    return {
+      ...data,
+      expires_in: expiresIn,
+    };
+  }
+
+  const issuedAt = Number.isFinite(data?.issued_at) ? data.issued_at : Date.now();
+
+  return {
+    ...data,
+    expires_in: expiresIn,
+    issued_at: issuedAt,
+    expires_at: issuedAt + (expiresIn * 1000),
+  };
 }
 
 // Step 1: Redirect to TastyTrade login --------------------------------------
@@ -165,12 +207,12 @@ async function handleOAuthCallback(code, returnedState) {
       throw new Error(data.error_description || data.error || 'Token exchange failed');
     }
 
-    tokenResponse = data;
+    tokenResponse = normalizeTokenResponse(data);
 
     localStorage.setItem('token_response', JSON.stringify(tokenResponse));
 
     await loadAccounts();
-    showAuthenticated();
+    await showAuthenticated();
 
   } catch (err) {
     setStatus(authStatus, `Error: ${err.message}`, 'error');
@@ -197,15 +239,20 @@ async function refreshAccessToken() {
     throw new Error(data.error_description || data.error || 'Token refresh failed');
   }
 
-  // Update all three values — server may rotate the refresh token
-  tokenResponse = data;
+  // Update all values — server may rotate the refresh token
+  tokenResponse = normalizeTokenResponse(data);
+  localStorage.setItem('token_response', JSON.stringify(tokenResponse));
 }
 
 // Proactively refresh if within 60 seconds of expiry
 async function ensureValidToken() {
   if (!tokenResponse?.refresh_token) throw new Error('Not authenticated');
-  const tokenExpiry = Date.now() + (tokenResponse.expires_in * 1000);
-  if (tokenExpiry && Date.now() < tokenExpiry - 60_000) return;
+
+  if (!Number.isFinite(tokenResponse.expires_at)) {
+    tokenResponse = normalizeTokenResponse(tokenResponse);
+  }
+
+  if (Date.now() < tokenResponse.expires_at - 60_000) return;
 
   try {
     await refreshAccessToken();
@@ -221,9 +268,11 @@ async function showAuthenticated() {
   appHeader.classList.remove('hidden');
   tradingSection.classList.remove('hidden');
 
-  envBadge.textContent = useSandbox ? 'Sandbox' : 'Live';
+  envBadge.textContent = useSandbox ? 'Sandbox' : 'Production';
   envBadge.className = useSandbox ? 'badge-sandbox' : 'badge-production';
 
+  setLivePriceText(currentSymbol, null, true);
+  await subscribeSymbolPrice(currentSymbol);
   await loadChain(currentSymbol);
 }
 
@@ -243,6 +292,9 @@ btnLogout.addEventListener('click', () => {
   setStatus(authStatus, '', '');
   accountSelect.innerHTML = '';
   orderResponse.textContent = '';
+
+  clearMarketDataConnection();
+  setLivePriceText(currentSymbol, null, false);
 });
 
 // Load accounts ---------------------------------------------------------------
@@ -252,7 +304,9 @@ async function loadAccounts() {
 
   accountSelect.innerHTML = '';
   accounts.forEach(item => {
-    const acct = item['account'];
+    const acct = item?.account;
+    if (!acct?.['account-number']) return;
+
     const opt = document.createElement('option');
     opt.value = acct['account-number'];
     opt.textContent = `${acct['account-number']} — ${acct['nickname'] ?? acct['account-type-name']}`;
@@ -262,12 +316,12 @@ async function loadAccounts() {
 
 // Submit order ---------------------------------------------------------------
 async function submitOrder(staged, side, dryRun = false) {
-  const quantity = parseInt(document.getElementById('quantity').value);
+  const quantity = Number.parseInt(document.getElementById('quantity').value, 10);
   const accountNumber = accountSelect.value;
   const statusEl = side === 'call' ? callOrderStatus : putOrderStatus;
   const responseEl = side === 'call' ? callOrderResponse : putOrderResponse;
 
-  if (!staged || isNaN(quantity)) {
+  if (!staged || Number.isNaN(quantity) || quantity <= 0) {
     setStatus(statusEl, 'Missing symbol or quantity.', 'error');
     return;
   }
@@ -275,10 +329,9 @@ async function submitOrder(staged, side, dryRun = false) {
   responseEl.textContent = '';
   responseEl.classList.add('hidden');
 
-  const order = {
+  const marketOrder = {
     'order-type': 'Market',
     'time-in-force': 'Day',
-    'price-effect': staged.action.startsWith('Buy') ? 'Debit' : 'Credit',
     'legs': [
       {
         'instrument-type': 'Equity Option',
@@ -293,21 +346,67 @@ async function submitOrder(staged, side, dryRun = false) {
     ? `/accounts/${accountNumber}/orders/dry-run`
     : `/accounts/${accountNumber}/orders`;
 
-  setStatus(statusEl, dryRun ? 'Running dry run...' : 'Submitting order...', 'info');
+  setStatus(statusEl, dryRun ? 'Running dry run' : 'Submitting order', 'info');
 
   try {
-    const result = await apiPost(endpoint, order);
-    setStatus(statusEl, dryRun ? '✓ Dry run complete' : '✓ Order submitted', 'success');
-    responseEl.textContent = JSON.stringify(result, null, 2);
-    responseEl.classList.remove('hidden');
+    const result = await apiPost(endpoint, marketOrder);
+
+    if (dryRun) {
+      const dryRunMessage = getDryRunApiMessage(result);
+      const statusMessage = dryRunMessage
+        ? dryRunMessage
+        : 'Dry run complete';
+      const statusType = dryRunMessage ? 'info' : 'success';
+      setStatus(statusEl, statusMessage, statusType);
+    } else {
+      setStatus(statusEl, 'Order submitted', 'success');
+    }
+
+    responseEl.textContent = '';
+    responseEl.classList.add('hidden');
   } catch (err) {
     setStatus(statusEl, `Error: ${err.message}`, 'error');
   }
 }
 
+function getDryRunApiMessage(result) {
+  const warningCandidates = [
+    result?.warnings,
+    result?.data?.warnings,
+    result?.['warnings'],
+  ];
+
+  for (const warnings of warningCandidates) {
+    if (!Array.isArray(warnings) || warnings.length === 0) continue;
+
+    const messages = warnings
+      .map(warning => {
+        if (typeof warning === 'string') return warning;
+        return warning?.message ?? warning?.code ?? null;
+      })
+      .filter(Boolean);
+
+    if (messages.length > 0) {
+      return messages.join(' | ');
+    }
+  }
+
+  const messageCandidates = [
+    result?.message,
+    result?.data?.message,
+    result?.data?.order?.status,
+    result?.order?.status,
+    result?.context,
+  ];
+
+  return messageCandidates.find(value => typeof value === 'string' && value.trim().length > 0) ?? null;
+}
+
 // Option Chain ---------------------------------------------------------------
 async function loadChain(ticker) {
   if (!ticker) return;
+
+  hasAutoScrolledToLiveStrike = false;
 
   // Clear staged orders
   stagedCall = null;
@@ -325,6 +424,7 @@ async function loadChain(ticker) {
   setStatus(callOrderStatus, '', '');
   callOrderResponse.textContent = '';
   callOrderResponse.classList.add('hidden');
+  callBpReductionEl.textContent = '--';
 
   putSymbolEl.textContent = 'No put selected';
   putSymbolEl.classList.add('empty');
@@ -335,6 +435,7 @@ async function loadChain(ticker) {
   setStatus(putOrderStatus, '', '');
   putOrderResponse.textContent = '';
   putOrderResponse.classList.add('hidden');
+  putBpReductionEl.textContent = '--';
 
   // Also clear any highlighted selections in the chain
   document.querySelectorAll('.direction-btn.call-selected, .direction-btn.put-selected')
@@ -364,8 +465,6 @@ async function loadChain(ticker) {
 }
 
 // Auto-load triggers ---------------------------------------------------------
-let chainLoading = false;
-
 let currentSymbol = 'SPY';
 
 document.querySelectorAll('.symbol-btn').forEach(btn => {
@@ -375,6 +474,7 @@ document.querySelectorAll('.symbol-btn').forEach(btn => {
     document.querySelectorAll('.symbol-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentSymbol = btn.dataset.symbol;
+    subscribeSymbolPrice(currentSymbol);
     loadChain(currentSymbol);
   });
 });
@@ -388,8 +488,6 @@ function formatExpiry(dateStr) {
 
 function renderChain(expirations) {
   chainRows.innerHTML = '';
-  expiryTabs.innerHTML = '';
-  expiryTabs.classList.add('hidden');
 
   // Sort by expiration date
   expirations.sort((a, b) => a['expiration-date'].localeCompare(b['expiration-date']));
@@ -428,6 +526,7 @@ function renderChain(expirations) {
 
       const row = document.createElement('div');
       row.className = 'chain-row-item';
+      row.dataset.strikePrice = String(strikePrice);
 
       // Call side — Long / Short
       const callCell = document.createElement('div');
@@ -479,6 +578,7 @@ function renderChain(expirations) {
     header.addEventListener('click', () => {
       const isOpen = body.classList.toggle('open');
       header.querySelector('.expiry-chevron').textContent = isOpen ? '▼' : '▶';
+      updateAtmMarkers();
     });
 
     // First group open by default
@@ -491,96 +591,120 @@ function renderChain(expirations) {
     chainRows.appendChild(body);
   });
 
-  // Scroll the first open expiry body to 50%
-  const firstBody = chainRows.querySelector('.expiry-body.open');
-  if (firstBody) {
-    requestAnimationFrame(() => {
-      firstBody.scrollTop = (firstBody.scrollHeight - firstBody.clientHeight) / 2;
-    });
-  }
-
   chainSection.classList.remove('hidden');
+
+  requestAnimationFrame(() => {
+    maybeAutoScrollChainToLivePrice();
+    updateAtmMarkers();
+  });
 }
 
-// Remove parseSymbol and filterByDTE — no longer needed
+function getNearestStrikeRow(container, referencePrice) {
+  if (!container || !Number.isFinite(referencePrice)) return null;
 
-function renderStrikes(expiryData, container) {
-  const { calls, puts } = expiryData;
+  const rows = Array.from(container.querySelectorAll('.chain-row-item'));
+  if (rows.length === 0) return null;
 
-  const strikeMap = {};
-  calls.forEach(c => {
-    if (!strikeMap[c.strike]) strikeMap[c.strike] = {};
-    strikeMap[c.strike].call = c;
-  });
-  puts.forEach(p => {
-    if (!strikeMap[p.strike]) strikeMap[p.strike] = {};
-    strikeMap[p.strike].put = p;
-  });
+  let nearestRow = null;
+  let nearestDiff = Number.POSITIVE_INFINITY;
 
-  const strikes = Object.keys(strikeMap).map(Number).sort((a, b) => a - b);
+  rows.forEach(row => {
+    const strikePrice = Number.parseFloat(row.dataset.strikePrice);
+    if (!Number.isFinite(strikePrice)) return;
 
-  strikes.forEach(strike => {
-    const strikePrice = parseFloat(strike['strike-price']);
-    const callSymbol = strike['call'];
-    const putSymbol = strike['put'];
-
-    const row = document.createElement('div');
-    row.className = 'chain-row-item';
-
-    // Call side — Long / Short
-    const callCell = document.createElement('div');
-    callCell.className = 'option-cell';
-    if (callSymbol) {
-      const longBtn = document.createElement('span');
-      longBtn.className = 'direction-btn long';
-      longBtn.textContent = 'Long';
-      longBtn.addEventListener('click', () => selectSymbol(callSymbol, 'call', 'long', strikePrice, longBtn));
-
-      const shortBtn = document.createElement('span');
-      shortBtn.className = 'direction-btn short';
-      shortBtn.textContent = 'Short';
-      shortBtn.addEventListener('click', () => selectSymbol(callSymbol, 'call', 'short', strikePrice, shortBtn));
-
-      callCell.appendChild(longBtn);
-      callCell.appendChild(shortBtn);
+    const diff = Math.abs(strikePrice - referencePrice);
+    if (diff < nearestDiff) {
+      nearestDiff = diff;
+      nearestRow = row;
     }
-
-    const strikeEl = document.createElement('span');
-    strikeEl.className = 'strike-cell';
-    strikeEl.textContent = strikePrice.toFixed(0);
-
-    // Put side — Long / Short
-    const putCell = document.createElement('div');
-    putCell.className = 'option-cell put-option-cell';
-    if (putSymbol) {
-      const longBtn = document.createElement('span');
-      longBtn.className = 'direction-btn long';
-      longBtn.textContent = 'Long';
-      longBtn.addEventListener('click', () => selectSymbol(putSymbol, 'put', 'long', strikePrice, longBtn));
-
-      const shortBtn = document.createElement('span');
-      shortBtn.className = 'direction-btn short';
-      shortBtn.textContent = 'Short';
-      shortBtn.addEventListener('click', () => selectSymbol(putSymbol, 'put', 'short', strikePrice, shortBtn));
-
-      putCell.appendChild(longBtn);
-      putCell.appendChild(shortBtn);
-    }
-
-    row.appendChild(callCell);
-    row.appendChild(strikeEl);
-    row.appendChild(putCell);
-    body.appendChild(row);
   });
+
+  return nearestRow;
+}
+
+function updateAtmMarkers() {
+  document.querySelectorAll('.chain-row-item.atm-row').forEach(row => {
+    row.classList.remove('atm-row');
+  });
+
+  document.querySelectorAll('.chain-row-item .atm-marker-label').forEach(label => {
+    label.remove();
+  });
+
+  if (!Number.isFinite(currentLiveQuotePrice)) return;
+
+  document.querySelectorAll('.expiry-body').forEach(body => {
+    const nearestRow = getNearestStrikeRow(body, currentLiveQuotePrice);
+    if (nearestRow) {
+      nearestRow.classList.add('atm-row');
+      addAtmLabels(nearestRow);
+    }
+  });
+}
+
+function addAtmLabels(row) {
+  const createLabel = (text, className) => {
+    const label = document.createElement('span');
+    label.className = `atm-marker-label ${className}`;
+    label.textContent = text;
+    return label;
+  };
+
+  row.appendChild(createLabel('ITM ▲', 'itm-call-label'));
+  row.appendChild(createLabel('▼ ITM', 'itm-put-label'));
+}
+
+function scrollOpenChainBodyToNearestStrike() {
+  const openBody = chainRows.querySelector('.expiry-body.open');
+  if (!openBody) return false;
+
+  if (!Number.isFinite(currentLiveQuotePrice)) {
+    openBody.scrollTop = (openBody.scrollHeight - openBody.clientHeight) / 2;
+    return false;
+  }
+
+  const rows = Array.from(openBody.querySelectorAll('.chain-row-item'));
+  if (rows.length === 0) return false;
+
+  let nearestRow = null;
+  let nearestDiff = Number.POSITIVE_INFINITY;
+
+  rows.forEach(row => {
+    const strikePrice = Number.parseFloat(row.dataset.strikePrice);
+    if (!Number.isFinite(strikePrice)) return;
+
+    // Adding 8 allows the scroll to account for the difference in row height
+    const diff = Math.abs(strikePrice - currentLiveQuotePrice + 8);
+    if (diff < nearestDiff) {
+      nearestDiff = diff;
+      nearestRow = row;
+    }
+  });
+
+  if (!nearestRow) return false;
+
+  const targetTop = nearestRow.offsetTop - (openBody.clientHeight / 2) + (nearestRow.clientHeight / 2);
+  openBody.scrollTop = Math.max(0, targetTop);
+  return true;
+}
+
+function maybeAutoScrollChainToLivePrice() {
+  if (hasAutoScrolledToLiveStrike) return;
+  if (chainSection.classList.contains('hidden')) return;
+
+  const didScrollToLiveStrike = scrollOpenChainBodyToNearestStrike();
+  if (didScrollToLiveStrike) {
+    hasAutoScrolledToLiveStrike = true;
+  }
 }
 
 function selectSymbol(symbol, side, direction, strikePrice, el) {
-  const quantity = parseInt(document.getElementById('quantity').value);
+  const quantity = Number.parseInt(document.getElementById('quantity').value, 10) || 1;
   const units = quantity === 1 ? '' : 's';
   const action = direction === 'long' ? 'Buy to Open' : 'Sell to Open';
   const sideLabel = side === 'call' ? 'call' : 'put';
   const actionLabel = `${action} ${currentSymbol} ${quantity} ${sideLabel}${units}`;
-  const label = `${direction === 'long' ? 'Long' : 'Short'} ${sideLabel} — $${strikePrice.toFixed(0)}`;
+  const label = `${direction === 'long' ? 'Long' : 'Short'} ${sideLabel} $${strikePrice.toFixed(0)}`;
 
   // Clear previous highlights for this side
   const sideClass = side === 'call' ? '.call-selected' : '.put-selected';
@@ -599,6 +723,8 @@ function selectSymbol(symbol, side, direction, strikePrice, el) {
     setStatus(callOrderStatus, '', '');
     callOrderResponse.textContent = '';
     callOrderResponse.classList.add('hidden');
+    callBpReductionEl.textContent = '--';
+    updateBpEstimateForSide('call');
   } else {
     stagedPut = { symbol, action, label, strikePrice };
     putSymbolEl.textContent = label;
@@ -611,7 +737,216 @@ function selectSymbol(symbol, side, direction, strikePrice, el) {
     setStatus(putOrderStatus, '', '');
     putOrderResponse.textContent = '';
     putOrderResponse.classList.add('hidden');
+    putBpReductionEl.textContent = '--';
+    updateBpEstimateForSide('put');
   }
+}
+
+function parseQuantity() {
+  return Number.parseInt(document.getElementById('quantity').value, 10) || 1;
+}
+
+async function resolveOptionStreamerSymbol(optionSymbol) {
+  if (!optionSymbol) return null;
+
+  if (optionStreamerByOptionSymbol.has(optionSymbol)) {
+    return optionStreamerByOptionSymbol.get(optionSymbol);
+  }
+
+  const querySymbol = encodeURIComponent(optionSymbol);
+  const resp = await apiGet(`/instruments/equity-options?symbol[]=${querySymbol}`);
+  const instrument = resp?.data?.items?.[0] ?? null;
+  const streamerSymbol = instrument?.['streamer-symbol'] ?? optionSymbol;
+
+  optionStreamerByOptionSymbol.set(optionSymbol, streamerSymbol);
+  return streamerSymbol;
+}
+
+async function ensureOptionQuoteSubscription(streamerSymbol) {
+  if (!streamerSymbol) return;
+
+  await ensureDxLinkReady();
+  if (optionQuoteSubscriptions.has(streamerSymbol)) return;
+
+  sendDxLinkMessage({
+    type: 'FEED_SUBSCRIPTION',
+    channel: DXLINK_FEED_CHANNEL,
+    add: [
+      { type: 'Quote', symbol: streamerSymbol },
+    ],
+  });
+  optionQuoteSubscriptions.add(streamerSymbol);
+}
+
+function getOptionQuoteFromCache(streamerSymbol) {
+  const quote = optionQuoteByStreamerSymbol.get(streamerSymbol);
+  if (!quote) return null;
+
+  const bidPrice = Number(quote.bidPrice);
+  const askPrice = Number(quote.askPrice);
+  return {
+    bidPrice: Number.isFinite(bidPrice) ? bidPrice : null,
+    askPrice: Number.isFinite(askPrice) ? askPrice : null,
+  };
+}
+
+async function waitForOptionQuote(streamerSymbol, timeoutMs = 2_000) {
+  const cached = getOptionQuoteFromCache(streamerSymbol);
+  if (cached) return cached;
+
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const quote = getOptionQuoteFromCache(streamerSymbol);
+    if (quote) {
+      return quote;
+    }
+  }
+
+  return null;
+}
+
+function computeEstimatedBpReduction(staged, quantity, quote, underlyingPrice) {
+  const multiplier = 100;
+  const strikePrice = Number(staged?.strikePrice);
+  const isShort = staged?.action?.startsWith('Sell');
+  const underlyingSymbol = currentSymbol;
+  const usesElevatedIndexRates = underlyingSymbol === 'XSP';
+  const highRate = usesElevatedIndexRates ? 0.25 : 0.2;
+  const lowRate = usesElevatedIndexRates ? 0.15 : 0.1;
+
+  if (!isShort) {
+    const ask = Number(quote?.askPrice);
+    if (!Number.isFinite(ask) || ask <= 0) return null;
+    return ask * quantity * multiplier;
+  }
+
+  const bid = Number(quote?.bidPrice);
+  if (!Number.isFinite(bid) || bid <= 0) return null;
+  if (!Number.isFinite(strikePrice) || strikePrice <= 0) return null;
+  if (!Number.isFinite(underlyingPrice) || underlyingPrice <= 0) return null;
+
+  const sideLabel = staged?.label?.toLowerCase().includes('put') ? 'put' : 'call';
+  const outOfMoneyAmount = sideLabel === 'put'
+    ? Math.max(0, underlyingPrice - strikePrice)
+    : Math.max(0, strikePrice - underlyingPrice);
+
+  const calcOne = (highRate * underlyingPrice) - outOfMoneyAmount + bid;
+  const calcTwo = sideLabel === 'put'
+    ? (lowRate * strikePrice) + bid
+    : (lowRate * underlyingPrice) + bid;
+  const calcThree = 2.5;
+
+  const initialRequirementPerShare = Math.max(calcOne, calcTwo, calcThree);
+  const initialRequirement = initialRequirementPerShare * quantity * multiplier;
+  const premiumCredit = bid * quantity * multiplier;
+
+  return Math.max(0, initialRequirement - premiumCredit);
+}
+
+async function updateBpEstimateForSide(side) {
+  const staged = side === 'call' ? stagedCall : stagedPut;
+  const bpEl = side === 'call' ? callBpReductionEl : putBpReductionEl;
+
+  if (!staged || !bpEl) return;
+
+  const quantity = parseQuantity();
+  const requestId = ++bpEstimateRequestId;
+  bpEl.textContent = 'Estimating';
+
+  try {
+    const streamerSymbol = await resolveOptionStreamerSymbol(staged.symbol);
+    if (!streamerSymbol) {
+      if (requestId === bpEstimateRequestId) bpEl.textContent = '--';
+      return;
+    }
+
+    await ensureOptionQuoteSubscription(streamerSymbol);
+    const quote = await waitForOptionQuote(streamerSymbol, 2_000);
+
+    if (requestId !== bpEstimateRequestId) return;
+
+    const estimatedBp = computeEstimatedBpReduction(staged, quantity, quote, currentLiveQuotePrice);
+    bpEl.textContent = estimatedBp === null ? '--' : formatCurrency(estimatedBp);
+  } catch {
+    if (requestId === bpEstimateRequestId) {
+      bpEl.textContent = '--';
+    }
+  }
+}
+
+function refreshBpEstimates() {
+  if (stagedCall) updateBpEstimateForSide('call');
+  if (stagedPut) updateBpEstimateForSide('put');
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function toNumeric(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[$,]/g, '');
+    const parsed = Number.parseFloat(cleaned);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function extractBuyingPowerReduction(result) {
+  const bpEffect = result?.data?.['buying-power-effect']
+    ?? result?.['buying-power-effect']
+    ?? null;
+
+  if (!bpEffect || typeof bpEffect !== 'object') {
+    return null;
+  }
+
+  const directCandidates = [
+    bpEffect['change-in-buying-power'],
+    bpEffect['buying-power-change'],
+    bpEffect['change'],
+    bpEffect['effect'],
+    bpEffect['impact'],
+  ];
+
+  for (const candidate of directCandidates) {
+    const numeric = toNumeric(candidate);
+    if (numeric !== null) {
+      return Math.abs(numeric);
+    }
+  }
+
+  const numericValues = [];
+  Object.values(bpEffect).forEach(value => {
+    const numeric = toNumeric(value);
+    if (numeric !== null) {
+      numericValues.push(numeric);
+    }
+  });
+
+  if (numericValues.length === 0) {
+    return null;
+  }
+
+  const negativeValues = numericValues.filter(value => value < 0);
+  if (negativeValues.length > 0) {
+    return Math.abs(Math.min(...negativeValues));
+  }
+
+  return Math.max(...numericValues);
 }
 
 // Order quantity listeners ---------------------------------------------------
@@ -630,7 +965,418 @@ document.getElementById('quantity').addEventListener('change', () => {
       selectSymbol(stagedPut.symbol, 'put', direction, stagedPut.strikePrice, el);
     }
   }
+
+  refreshBpEstimates();
 });
+
+// DxLink market data ---------------------------------------------------------
+function setLivePriceText(symbol, price, connecting = false) {
+  if (!livePriceEl) return;
+
+  if (connecting) {
+    return;
+  }
+
+  if (typeof price === 'number' && Number.isFinite(price)) {
+    livePriceEl.textContent = `$${price.toFixed(2)}`;
+    updateAtmMarkers();
+    return;
+  }
+
+  livePriceEl.textContent = null;
+  updateAtmMarkers();
+}
+
+function setConnectionState(isLive) {
+  if (!liveConnectionEl) return;
+
+  if (isLive) {
+    liveConnectionEl.textContent = 'CONNECTED';
+    liveConnectionEl.classList.remove('disconnected');
+    liveConnectionEl.classList.add('live');
+    return;
+  }
+
+  liveConnectionEl.textContent = 'DISCONNECTED';
+  liveConnectionEl.classList.remove('live');
+  liveConnectionEl.classList.add('disconnected');
+}
+
+function clearMarketDataConnection() {
+  if (marketAutoReconnectTimer) {
+    clearTimeout(marketAutoReconnectTimer);
+    marketAutoReconnectTimer = null;
+  }
+
+  marketAutoReconnectAttempts = 0;
+
+  if (marketKeepaliveTimer) {
+    clearInterval(marketKeepaliveTimer);
+    marketKeepaliveTimer = null;
+  }
+
+  if (marketSocket) {
+    marketSocket.onopen = null;
+    marketSocket.onmessage = null;
+    marketSocket.onerror = null;
+    marketSocket.onclose = null;
+    try {
+      marketSocket.close();
+    } catch {
+      // ignore close errors
+    }
+  }
+
+  marketSocket = null;
+  marketSocketOpen = false;
+  marketAuthorized = false;
+  marketFeedReady = false;
+  marketReconnectInFlight = null;
+  marketQuoteToken = null;
+  marketDxlinkUrl = null;
+  selectedStreamerSymbol = null;
+  currentLiveQuotePrice = null;
+  hasAutoScrolledToLiveStrike = false;
+  optionQuoteByStreamerSymbol.clear();
+  optionQuoteSubscriptions.clear();
+  setConnectionState(false);
+}
+
+function sendDxLinkMessage(message) {
+  if (!marketSocket || marketSocket.readyState !== WebSocket.OPEN) return;
+  marketSocket.send(JSON.stringify(message));
+}
+
+function scheduleDxLinkReconnect() {
+  if (!tokenResponse?.access_token) return;
+  if (marketAutoReconnectTimer) return;
+
+  const delayMs = Math.min(30_000, 1_000 * (2 ** marketAutoReconnectAttempts));
+  marketAutoReconnectAttempts += 1;
+
+  marketAutoReconnectTimer = setTimeout(async () => {
+    marketAutoReconnectTimer = null;
+
+    try {
+      await reconnectDxLinkStreams();
+      marketAutoReconnectAttempts = 0;
+    } catch {
+      scheduleDxLinkReconnect();
+    }
+  }, delayMs);
+}
+
+async function reconnectDxLinkStreams() {
+  if (!tokenResponse?.access_token) return;
+
+  await ensureDxLinkReady();
+
+  if (selectedStreamerSymbol) {
+    sendDxLinkMessage({
+      type: 'FEED_SUBSCRIPTION',
+      channel: DXLINK_FEED_CHANNEL,
+      reset: true,
+      add: [
+        { type: 'Trade', symbol: selectedStreamerSymbol },
+        { type: 'Quote', symbol: selectedStreamerSymbol },
+      ],
+    });
+  }
+
+  if (optionQuoteSubscriptions.size > 0) {
+    const optionSymbols = Array.from(optionQuoteSubscriptions).map(symbol => ({ type: 'Quote', symbol }));
+    sendDxLinkMessage({
+      type: 'FEED_SUBSCRIPTION',
+      channel: DXLINK_FEED_CHANNEL,
+      add: optionSymbols,
+    });
+  }
+}
+
+function normalizeCompactEvents(rawData) {
+  if (!Array.isArray(rawData) || rawData.length < 2) return { eventType: null, events: [] };
+
+  const eventType = rawData[0];
+  const payload = rawData[1];
+  if (!Array.isArray(payload) || payload.length === 0) {
+    return { eventType, events: [] };
+  }
+
+  if (Array.isArray(payload[0])) {
+    return { eventType, events: payload };
+  }
+
+  const fieldCountByType = {
+    Trade: 3,
+    Quote: 4,
+  };
+
+  const fieldCount = fieldCountByType[eventType];
+  if (!fieldCount) {
+    return { eventType, events: [payload] };
+  }
+
+  const events = [];
+  for (let index = 0; index + fieldCount - 1 < payload.length; index += fieldCount) {
+    events.push(payload.slice(index, index + fieldCount));
+  }
+
+  return { eventType, events };
+}
+
+function handleDxLinkFeedData(rawData) {
+  const { eventType, events } = normalizeCompactEvents(rawData);
+
+  if (!eventType || events.length === 0) return;
+
+  events.forEach(eventRow => {
+    if (!Array.isArray(eventRow) || eventRow.length < 3) return;
+
+    const eventSymbol = eventRow[1];
+
+    if (eventType === 'Trade') {
+      if (eventSymbol !== selectedStreamerSymbol) return;
+
+      const price = Number(eventRow[2]);
+      if (Number.isFinite(price)) {
+        currentLiveQuotePrice = price;
+        setLivePriceText(currentSymbol, price, false);
+        maybeAutoScrollChainToLivePrice();
+        refreshBpEstimates();
+      }
+      return;
+    }
+
+    if (eventType === 'Quote') {
+      const bidPrice = Number(eventRow[2]);
+      const askPrice = Number(eventRow[3]);
+
+      if (optionQuoteSubscriptions.has(eventSymbol)) {
+        optionQuoteByStreamerSymbol.set(eventSymbol, {
+          bidPrice,
+          askPrice,
+          updatedAt: Date.now(),
+        });
+      }
+
+      if (eventSymbol !== selectedStreamerSymbol) return;
+
+      if (Number.isFinite(bidPrice) && Number.isFinite(askPrice) && bidPrice > 0 && askPrice > 0) {
+        const mid = (bidPrice + askPrice) / 2;
+        currentLiveQuotePrice = mid;
+        setLivePriceText(currentSymbol, mid, false);
+        maybeAutoScrollChainToLivePrice();
+        refreshBpEstimates();
+      }
+    }
+  });
+}
+
+function startDxLinkKeepalive() {
+  if (marketKeepaliveTimer) {
+    clearInterval(marketKeepaliveTimer);
+  }
+
+  marketKeepaliveTimer = setInterval(() => {
+    sendDxLinkMessage({ type: 'KEEPALIVE', channel: DXLINK_CONTROL_CHANNEL });
+  }, 30_000);
+}
+
+async function getQuoteToken() {
+  const quote = await apiGet('/api-quote-tokens');
+  const token = quote?.data?.token;
+  const dxlinkUrl = quote?.data?.['dxlink-url'];
+
+  if (!token || !dxlinkUrl) {
+    throw new Error('Unable to get market data token');
+  }
+
+  marketQuoteToken = token;
+  marketDxlinkUrl = dxlinkUrl;
+}
+
+async function resolveStreamerSymbol(symbol) {
+  if (symbolMapCache.has(symbol)) {
+    return symbolMapCache.get(symbol);
+  }
+
+  const instrument = await apiGet(`/instruments/equities/${symbol}`);
+  const streamerSymbol = instrument?.data?.['streamer-symbol'] || symbol;
+  symbolMapCache.set(symbol, streamerSymbol);
+  return streamerSymbol;
+}
+
+async function ensureDxLinkReady() {
+  if (marketFeedReady && marketSocket?.readyState === WebSocket.OPEN) {
+    return;
+  }
+
+  if (marketReconnectInFlight) {
+    return marketReconnectInFlight;
+  }
+
+  marketReconnectInFlight = new Promise(async (resolve, reject) => {
+    let settled = false;
+    let timeoutId = null;
+
+    const finishResolve = () => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      marketReconnectInFlight = null;
+      resolve();
+    };
+
+    const finishReject = error => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      marketReconnectInFlight = null;
+      reject(error);
+    };
+
+    try {
+      await getQuoteToken();
+
+      marketSocket = new WebSocket(marketDxlinkUrl);
+
+      marketSocket.onopen = () => {
+        marketSocketOpen = true;
+        sendDxLinkMessage({
+          type: 'SETUP',
+          channel: DXLINK_CONTROL_CHANNEL,
+          version: '0.1-DXF-JS/0.3.0',
+          keepaliveTimeout: 60,
+          acceptKeepaliveTimeout: 60,
+        });
+      };
+
+      marketSocket.onmessage = event => {
+        let message = null;
+
+        try {
+          message = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+
+        if (!message?.type) return;
+
+        if (message.type === 'AUTH_STATE') {
+          if (message.state === 'UNAUTHORIZED') {
+            sendDxLinkMessage({
+              type: 'AUTH',
+              channel: DXLINK_CONTROL_CHANNEL,
+              token: marketQuoteToken,
+            });
+          }
+
+          if (message.state === 'AUTHORIZED') {
+            marketAuthorized = true;
+            sendDxLinkMessage({
+              type: 'CHANNEL_REQUEST',
+              channel: DXLINK_FEED_CHANNEL,
+              service: 'FEED',
+              parameters: { contract: 'AUTO' },
+            });
+          }
+
+          return;
+        }
+
+        if (message.type === 'CHANNEL_OPENED' && message.channel === DXLINK_FEED_CHANNEL) {
+          sendDxLinkMessage({
+            type: 'FEED_SETUP',
+            channel: DXLINK_FEED_CHANNEL,
+            acceptAggregationPeriod: 0.1,
+            acceptDataFormat: 'COMPACT',
+            acceptEventFields: {
+              Trade: ['eventType', 'eventSymbol', 'price'],
+              Quote: ['eventType', 'eventSymbol', 'bidPrice', 'askPrice'],
+            },
+          });
+          return;
+        }
+
+        if (message.type === 'FEED_CONFIG' && message.channel === DXLINK_FEED_CHANNEL) {
+          marketFeedReady = true;
+          startDxLinkKeepalive();
+          setConnectionState(true);
+          if (marketAutoReconnectTimer) {
+            clearTimeout(marketAutoReconnectTimer);
+            marketAutoReconnectTimer = null;
+          }
+          marketAutoReconnectAttempts = 0;
+          finishResolve();
+          return;
+        }
+
+        if (message.type === 'FEED_DATA' && message.channel === DXLINK_FEED_CHANNEL) {
+          handleDxLinkFeedData(message.data);
+        }
+      };
+
+      marketSocket.onerror = () => {
+        setConnectionState(false);
+        scheduleDxLinkReconnect();
+      };
+
+      marketSocket.onclose = () => {
+        if (marketKeepaliveTimer) {
+          clearInterval(marketKeepaliveTimer);
+          marketKeepaliveTimer = null;
+        }
+
+        marketSocketOpen = false;
+        marketAuthorized = false;
+        marketFeedReady = false;
+        marketSocket = null;
+        marketReconnectInFlight = null;
+        setConnectionState(false);
+        scheduleDxLinkReconnect();
+      };
+
+      timeoutId = setTimeout(() => {
+        if (!marketFeedReady) {
+          finishReject(new Error('Market data connection timeout'));
+        }
+      }, 10_000);
+    } catch (error) {
+      scheduleDxLinkReconnect();
+      finishReject(error);
+    }
+  });
+
+  return marketReconnectInFlight;
+}
+
+async function subscribeSymbolPrice(symbol) {
+  if (!tokenResponse?.access_token) return;
+
+  try {
+    currentLiveQuotePrice = null;
+    setLivePriceText(symbol, null, true);
+
+    const streamerSymbol = await resolveStreamerSymbol(symbol);
+    selectedStreamerSymbol = streamerSymbol;
+
+    await ensureDxLinkReady();
+
+    sendDxLinkMessage({
+      type: 'FEED_SUBSCRIPTION',
+      channel: DXLINK_FEED_CHANNEL,
+      reset: true,
+      add: [
+        { type: 'Trade', symbol: streamerSymbol },
+        { type: 'Quote', symbol: streamerSymbol },
+      ],
+    });
+  } catch (err) {
+    setLivePriceText(symbol, null, false);
+    setConnectionState(false);
+    setStatus(chainStatus, `Market data error: ${err.message}`, 'error');
+  }
+}
 
 // Order button listeners ---------------------------------------------------
 btnDryRunCall.addEventListener('click', () => submitOrder(stagedCall, 'call', true));
@@ -678,7 +1424,13 @@ async function apiPost(path, body) {
       ? preflightErrors.map(e => e.message).join(', ')
       : err?.error?.message ?? `HTTP ${resp.status}`;
 
-    throw new Error(message);
+    const apiError = new Error(message);
+    apiError.status = resp.status;
+    apiError.code = err?.error?.code ?? null;
+    apiError.preflightCodes = Array.isArray(preflightErrors)
+      ? preflightErrors.map(item => item?.code).filter(Boolean)
+      : [];
+    throw apiError;
   }
 
   return resp.json();
@@ -688,4 +1440,10 @@ async function apiPost(path, body) {
 function setStatus(el, message, type) {
   el.textContent = message;
   el.className = `status ${type}`;
+
+  if (!message) {
+    el.style.display = 'none';
+  } else {
+    el.style.display = 'block';
+  }
 }

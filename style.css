@@ -126,15 +126,23 @@ header {
 }
 
 .header-inputs select {
-  width: 65px;
   padding: .4rem .6rem;
   font-size: 1rem;
   font-weight: 600;
-  text-align: center;
   background: #0f1117;
   border: 1px solid #2d3348;
   border-radius: 4px;
   color: #e2e8f0;
+}
+
+#quantity {
+  width: 65px;
+  text-align: center;
+}
+
+#account-select {
+  width: 194px;
+  text-align: left;
 }
 
 .symbol-buttons {
@@ -184,6 +192,40 @@ header {
   font-size: .8rem;
   padding: .2rem .5rem;
   margin: 0;
+}
+
+.live-price {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #fbbf24;
+  letter-spacing: .02em;
+}
+
+.live-price-wrap {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.live-connection {
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: .15rem .4rem;
+  border-radius: 999px;
+  border: 1px solid;
+}
+
+.live-connection.live {
+  color: #86efac;
+  border-color: #14532d;
+  background: #14532d;
+}
+
+.live-connection.disconnected {
+  color: #fca5a5;
+  border-color: #450a0a;
+  background: #450a0a;
 }
 
 .header-right {
@@ -279,6 +321,43 @@ header {
   border-top: 1px solid #1a1f2e;
   font-size: .85rem;
   align-items: center;
+}
+
+.chain-row-item.atm-row {
+  position: relative;
+}
+
+.chain-row-item.atm-row::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  border-top: 1px solid #fbbf24;
+  opacity: .8;
+  pointer-events: none;
+}
+
+.atm-marker-label {
+  position: absolute;
+  font-size: .6rem;
+  letter-spacing: .08em;
+  color: #fbbf24;
+  line-height: 1;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
+.itm-call-label {
+  left: 43%;
+  transform: translateX(-50%);
+  top: -1rem;
+}
+
+.itm-put-label {
+  left: 57%;
+  transform: translateX(-50%);
+  top: .3rem;
 }
 
 .chain-row-item:hover { background: #252a3a; }
@@ -397,7 +476,7 @@ header {
   border-radius: 0 0 4px 4px;
   margin-bottom: .5rem;
   overflow-y: auto;
-  max-height: 300px;
+  max-height: 315px;
 }
 
 .expiry-body.open { display: block; }
@@ -445,4 +524,27 @@ header {
 .staged-action {
   font-size: .8rem;
   color: #64748b;
+}
+
+.bp-impact-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .35rem .5rem;
+  border: 1px solid #2d3348;
+  border-radius: 4px;
+  background: #0f1117;
+}
+
+.bp-label {
+  font-size: .72rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.bp-value {
+  font-size: .85rem;
+  font-weight: 700;
+  color: #e2e8f0;
 }
