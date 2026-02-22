@@ -456,12 +456,12 @@ header {
 
 .call-bid,
 .put-bid {
-  color: #86efac;
+  color: #fca5a5;
 }
 
 .call-ask,
 .put-ask {
-  color: #fca5a5;
+  color: #86efac;
 }
 
 .quote-price.call-selected,

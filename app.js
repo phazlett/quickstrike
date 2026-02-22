@@ -125,7 +125,30 @@ let optionQuoteByStreamerSymbol = new Map();
 let optionQuoteSubscriptions = new Set();
 let optionQuoteCellsByStreamerSymbol = new Map();
 let optionQuoteRenderCycle = 0;
-let bpEstimateRequestId = 0;
+const bpEstimateInFlight = {
+  call: false,
+  put: false,
+};
+const bpEstimateNeedsRefresh = {
+  call: false,
+  put: false,
+};
+
+function setBpDisplay(side, text) {
+  const bpEl = side === 'call' ? callBpReductionEl : putBpReductionEl;
+  if (!bpEl) return;
+
+  bpEl.textContent = text;
+}
+
+async function withTimeout(promise, timeoutMs, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`Timeout: ${label}`)), timeoutMs);
+    }),
+  ]);
+}
 
 // On page refresh: check if returning from OAuth redirect ---------------------
 
@@ -642,7 +665,7 @@ async function loadChain(ticker) {
   setStatus(callOrderStatus, '', '');
   callOrderResponse.textContent = '';
   callOrderResponse.classList.add('hidden');
-  callBpReductionEl.textContent = '--';
+  setBpDisplay('call', '--');
 
   putSymbolEl.textContent = 'No put selected';
   putSymbolEl.classList.add('empty');
@@ -652,7 +675,7 @@ async function loadChain(ticker) {
   setStatus(putOrderStatus, '', '');
   putOrderResponse.textContent = '';
   putOrderResponse.classList.add('hidden');
-  putBpReductionEl.textContent = '--';
+  setBpDisplay('put', '--');
 
   // Also clear any highlighted selections in the chain
   document.querySelectorAll('.quote-price.call-selected, .quote-price.put-selected')
@@ -1094,8 +1117,8 @@ function selectSymbol(symbol, side, direction, strikePrice, el) {
     setStatus(callOrderStatus, '', '');
     callOrderResponse.textContent = '';
     callOrderResponse.classList.add('hidden');
-    callBpReductionEl.textContent = '--';
-    updateBpEstimateForSide('call');
+    setBpDisplay('call', '--');
+    queueBpEstimateRefreshForSide('call');
   } else {
     stagedPut = { symbol, action, label, strikePrice };
     putSymbolEl.textContent = label;
@@ -1105,13 +1128,19 @@ function selectSymbol(symbol, side, direction, strikePrice, el) {
     setStatus(putOrderStatus, '', '');
     putOrderResponse.textContent = '';
     putOrderResponse.classList.add('hidden');
-    putBpReductionEl.textContent = '--';
-    updateBpEstimateForSide('put');
+    setBpDisplay('put', '--');
+    queueBpEstimateRefreshForSide('put');
   }
 }
 
 function parseQuantity() {
   return Number.parseInt(document.getElementById('quantity').value, 10) || 1;
+}
+
+function buildActionLabel(action, side, quantity) {
+  const units = quantity === 1 ? '' : 's';
+  const sideLabel = side === 'call' ? 'call' : 'put';
+  return `${action} ${currentSymbol} ${quantity} ${sideLabel}${units}`;
 }
 
 async function resolveOptionStreamerSymbol(optionSymbol) {
@@ -1207,41 +1236,67 @@ async function updateBpEstimateForSide(side) {
   if (!staged || !bpEl) return;
 
   const quantity = parseQuantity();
-  const requestId = ++bpEstimateRequestId;
-  bpEl.textContent = 'Estimating';
 
   try {
-    const streamerSymbol = await resolveOptionStreamerSymbol(staged.symbol);
+    const streamerSymbol = await withTimeout(
+      resolveOptionStreamerSymbol(staged.symbol),
+      4_000,
+      `resolveOptionStreamerSymbol:${side}`,
+    );
     if (!streamerSymbol) {
-      if (requestId === bpEstimateRequestId) bpEl.textContent = '--';
+      setBpDisplay(side, '--');
       return;
     }
 
-    await ensureOptionQuoteSubscription(streamerSymbol);
-    const quote = await waitForOptionQuote(streamerSymbol, 2_000);
-
-    if (requestId !== bpEstimateRequestId) return;
+    await withTimeout(
+      ensureOptionQuoteSubscription(streamerSymbol),
+      4_000,
+      `ensureOptionQuoteSubscription:${side}`,
+    );
+    let quote = getOptionQuoteFromCache(streamerSymbol);
+    if (!quote) {
+      setBpDisplay(side, 'Estimating');
+      quote = await waitForOptionQuote(streamerSymbol, 2_000);
+    }
 
     const estimatedBp = computeEstimatedBpReduction(staged, quantity, quote, currentLiveQuotePrice);
-    bpEl.textContent = estimatedBp === null ? '--' : formatCurrency(estimatedBp);
+    setBpDisplay(side, estimatedBp === null ? '--' : formatCurrency(estimatedBp));
   } catch {
-    if (requestId === bpEstimateRequestId) {
-      bpEl.textContent = '--';
-    }
+    setBpDisplay(side, '--');
   }
 }
 
+function queueBpEstimateRefreshForSide(side) {
+  if (bpEstimateInFlight[side]) {
+    bpEstimateNeedsRefresh[side] = true;
+    return;
+  }
+
+  bpEstimateInFlight[side] = true;
+
+  (async () => {
+    try {
+      do {
+        bpEstimateNeedsRefresh[side] = false;
+        await updateBpEstimateForSide(side);
+      } while (bpEstimateNeedsRefresh[side]);
+    } finally {
+      bpEstimateInFlight[side] = false;
+    }
+  })();
+}
+
 function refreshBpEstimates() {
-  if (stagedCall) updateBpEstimateForSide('call');
-  if (stagedPut) updateBpEstimateForSide('put');
+  if (stagedCall) queueBpEstimateRefreshForSide('call');
+  if (stagedPut) queueBpEstimateRefreshForSide('put');
 }
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(value);
 }
 
@@ -1307,19 +1362,14 @@ function extractBuyingPowerReduction(result) {
 
 // Order quantity listeners ---------------------------------------------------
 document.getElementById('quantity').addEventListener('change', () => {
+  const quantity = parseQuantity();
+
   if (stagedCall) {
-    const el = document.querySelector('.quote-price.call-selected');
-    if (el) {
-      const direction = el.dataset.direction === 'short' ? 'short' : 'long';
-      selectSymbol(stagedCall.symbol, 'call', direction, stagedCall.strikePrice, el);
-    }
+    callActionEl.textContent = buildActionLabel(stagedCall.action, 'call', quantity);
   }
+
   if (stagedPut) {
-    const el = document.querySelector('.quote-price.put-selected');
-    if (el) {
-      const direction = el.dataset.direction === 'short' ? 'short' : 'long';
-      selectSymbol(stagedPut.symbol, 'put', direction, stagedPut.strikePrice, el);
-    }
+    putActionEl.textContent = buildActionLabel(stagedPut.action, 'put', quantity);
   }
 
   refreshBpEstimates();
