@@ -14,8 +14,58 @@ const CONFIG = {
 let tokenResponse = null;
 let stagedCall = null;
 let stagedPut = null;
+let authHealthy = false;
+let authRefreshInFlight = null;
+let authRefreshTimer = null;
+let authLastRefreshAt = null;
+let authLastError = null;
+const AUTH_DEBUG = true;
+const REFRESH_TOKEN_BACKUP_KEY = 'token_refresh_backup';
 
 const getConfig = () => CONFIG[useSandbox ? 'sandbox' : 'production'];
+
+function authDebug(message, details = null) {
+  if (!AUTH_DEBUG) return;
+
+  const timestamp = new Date().toISOString();
+  if (details === null) {
+    console.log(`[AUTH DEBUG ${timestamp}] ${message}`);
+    return;
+  }
+
+  console.log(`[AUTH DEBUG ${timestamp}] ${message}`, details);
+}
+
+function getRefreshTokenBackup() {
+  const value = localStorage.getItem(REFRESH_TOKEN_BACKUP_KEY);
+  return value && value.trim().length > 0 ? value : null;
+}
+
+function setRefreshTokenBackup(refreshToken) {
+  if (typeof refreshToken !== 'string' || refreshToken.trim().length === 0) return;
+  localStorage.setItem(REFRESH_TOKEN_BACKUP_KEY, refreshToken);
+  authDebug('setRefreshTokenBackup: backup updated', {
+    hasRefreshToken: true,
+    refreshTokenLength: refreshToken.length,
+  });
+}
+
+function restoreRefreshTokenIfMissing(source = 'unknown') {
+  if (!tokenResponse || tokenResponse.refresh_token) return false;
+
+  const backupRefreshToken = getRefreshTokenBackup();
+  if (!backupRefreshToken) return false;
+
+  tokenResponse = {
+    ...tokenResponse,
+    refresh_token: backupRefreshToken,
+  };
+
+  authDebug('restoreRefreshTokenIfMissing: restored refresh token from backup', {
+    source,
+  });
+  return true;
+}
 
 // DOM refs ---------------------------------------------------------------
 const appHeader = document.getElementById('app-header');
@@ -73,6 +123,8 @@ let hasAutoScrolledToLiveStrike = false;
 let optionStreamerByOptionSymbol = new Map();
 let optionQuoteByStreamerSymbol = new Map();
 let optionQuoteSubscriptions = new Set();
+let optionQuoteCellsByStreamerSymbol = new Map();
+let optionQuoteRenderCycle = 0;
 let bpEstimateRequestId = 0;
 
 // On page refresh: check if returning from OAuth redirect ---------------------
@@ -98,11 +150,23 @@ window.addEventListener('load', async () => {
     return;
   }
 
-  tokenResponse = normalizeTokenResponse(tokenResponse);
-  localStorage.setItem('token_response', JSON.stringify(tokenResponse));
-
-  await loadAccounts();
-  await showAuthenticated();
+  try {
+    restoreRefreshTokenIfMissing('startup');
+    tokenResponse = normalizeTokenResponse(tokenResponse);
+    authDebug('startup: writing normalized token_response', {
+      hasAccessToken: !!tokenResponse?.access_token,
+      hasRefreshToken: !!tokenResponse?.refresh_token,
+      expiresAt: tokenResponse?.expires_at ?? null,
+    });
+    localStorage.setItem('token_response', JSON.stringify(tokenResponse));
+    setRefreshTokenBackup(tokenResponse.refresh_token);
+    await ensureValidToken();
+    await loadAccounts();
+    await showAuthenticated();
+  } catch (err) {
+    clearAuthState();
+    setStatus(authStatus, `Session restore failed: ${err.message}`, 'error');
+  }
 });
 
 // PKCE Helpers ---------------------------------------------------------------
@@ -141,6 +205,27 @@ function normalizeTokenResponse(data) {
     issued_at: issuedAt,
     expires_at: issuedAt + (expiresIn * 1000),
   };
+}
+
+function persistTokenResponse(nextData, previousData = tokenResponse) {
+  const merged = {
+    ...(previousData ?? {}),
+    ...(nextData ?? {}),
+    refresh_token: nextData?.refresh_token ?? previousData?.refresh_token ?? null,
+  };
+
+  tokenResponse = normalizeTokenResponse(merged);
+  authDebug('persistTokenResponse: writing token_response', {
+    nextHasAccessToken: !!nextData?.access_token,
+    nextHasRefreshToken: !!nextData?.refresh_token,
+    previousHasRefreshToken: !!previousData?.refresh_token,
+    mergedHasAccessToken: !!tokenResponse?.access_token,
+    mergedHasRefreshToken: !!tokenResponse?.refresh_token,
+    expiresAt: tokenResponse?.expires_at ?? null,
+  });
+  localStorage.setItem('token_response', JSON.stringify(tokenResponse));
+  setRefreshTokenBackup(tokenResponse.refresh_token);
+  return tokenResponse;
 }
 
 // Step 1: Redirect to TastyTrade login --------------------------------------
@@ -207,9 +292,7 @@ async function handleOAuthCallback(code, returnedState) {
       throw new Error(data.error_description || data.error || 'Token exchange failed');
     }
 
-    tokenResponse = normalizeTokenResponse(data);
-
-    localStorage.setItem('token_response', JSON.stringify(tokenResponse));
+    persistTokenResponse(data, null);
 
     await loadAccounts();
     await showAuthenticated();
@@ -220,46 +303,119 @@ async function handleOAuthCallback(code, returnedState) {
 }
 
 async function refreshAccessToken() {
-  const { tokenEndpoint } = getConfig();
-
-  const resp = await fetch(tokenEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: tokenResponse.refresh_token,
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-    })
-  });
-
-  const data = await resp.json();
-
-  if (!resp.ok) {
-    throw new Error(data.error_description || data.error || 'Token refresh failed');
+  if (authRefreshInFlight) {
+    authDebug('refreshAccessToken: reusing in-flight refresh promise');
+    return authRefreshInFlight;
   }
 
-  // Update all values — server may rotate the refresh token
-  tokenResponse = normalizeTokenResponse(data);
-  localStorage.setItem('token_response', JSON.stringify(tokenResponse));
+  const currentRefreshToken = tokenResponse?.refresh_token;
+  if (!currentRefreshToken) {
+    throw new Error('Missing refresh token');
+  }
+
+  const { tokenEndpoint } = getConfig();
+  authDebug('refreshAccessToken: starting refresh request', {
+    hasAccessToken: !!tokenResponse?.access_token,
+    hasRefreshToken: !!currentRefreshToken,
+    expiresAt: tokenResponse?.expires_at ?? null,
+  });
+
+  authRefreshInFlight = (async () => {
+    const resp = await fetch(tokenEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: currentRefreshToken,
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+      })
+    });
+
+    const data = await resp.json();
+    authDebug('refreshAccessToken: refresh response received', {
+      status: resp.status,
+      ok: resp.ok,
+      hasAccessToken: !!data?.access_token,
+      hasRefreshToken: !!data?.refresh_token,
+      expiresIn: data?.expires_in ?? null,
+      oauthError: data?.error ?? null,
+      oauthErrorDescription: data?.error_description ?? null,
+    });
+
+    if (!resp.ok) {
+      const error = new Error(data.error_description || data.error || 'Token refresh failed');
+      error.oauthError = data.error ?? null;
+      throw error;
+    }
+
+    persistTokenResponse(data);
+    authLastRefreshAt = Date.now();
+    authLastError = null;
+    authDebug('refreshAccessToken: refresh succeeded', {
+      expiresAt: tokenResponse?.expires_at ?? null,
+      hasRefreshToken: !!tokenResponse?.refresh_token,
+    });
+  })();
+
+  try {
+    await authRefreshInFlight;
+  } finally {
+    authRefreshInFlight = null;
+  }
 }
 
 // Proactively refresh if within 60 seconds of expiry
-async function ensureValidToken() {
-  if (!tokenResponse?.refresh_token) throw new Error('Not authenticated');
+async function ensureValidToken({ forceRefresh = false } = {}) {
+  if (!tokenResponse?.access_token) {
+    authDebug('ensureValidToken: missing access token');
+    throw new Error('Not authenticated');
+  }
 
   if (!Number.isFinite(tokenResponse.expires_at)) {
     tokenResponse = normalizeTokenResponse(tokenResponse);
   }
 
-  if (Date.now() < tokenResponse.expires_at - 60_000) return;
+  const shouldRefreshByTime = Date.now() >= tokenResponse.expires_at - 60_000;
+  const shouldRefresh = forceRefresh || shouldRefreshByTime;
+  authDebug('ensureValidToken: token check', {
+    forceRefresh,
+    shouldRefreshByTime,
+    shouldRefresh,
+    expiresAt: tokenResponse.expires_at,
+    now: Date.now(),
+  });
+
+  if (!shouldRefresh) {
+    setAuthHealthyState(true);
+    return;
+  }
+
+  if (restoreRefreshTokenIfMissing('ensureValidToken')) {
+    tokenResponse = normalizeTokenResponse(tokenResponse);
+    localStorage.setItem('token_response', JSON.stringify(tokenResponse));
+  }
+
+  if (!tokenResponse?.refresh_token) {
+    setAuthHealthyState(false);
+    authDebug('ensureValidToken: refresh required but missing refresh token');
+    throw new Error('Session refresh unavailable, please log in again');
+  }
 
   try {
     await refreshAccessToken();
+    setAuthHealthyState(true);
   } catch (err) {
-    // Refresh token itself has expired — force re-login
-    btnLogout.click();
-    throw new Error('Session expired, please log in again');
+    authLastError = err.message;
+    setAuthHealthyState(false);
+
+    const isExpiredSession = ['invalid_grant', 'invalid_token'].includes(err.oauthError);
+    if (isExpiredSession) {
+      btnLogout.click();
+      throw new Error('Session expired, please log in again');
+    }
+
+    throw new Error(`Token refresh failed: ${err.message}`);
   }
 }
 
@@ -270,6 +426,9 @@ async function showAuthenticated() {
 
   envBadge.textContent = useSandbox ? 'Sandbox' : 'Production';
   envBadge.className = useSandbox ? 'badge-sandbox' : 'badge-production';
+  startAuthMonitoring();
+  setAuthHealthyState(true);
+  applyTradeButtonState();
 
   setLivePriceText(currentSymbol, null, true);
   await subscribeSymbolPrice(currentSymbol);
@@ -277,13 +436,7 @@ async function showAuthenticated() {
 }
 
 btnLogout.addEventListener('click', () => {
-  // Clear auth state
-  tokenResponse = null;
-
-  // Clear any leftover PKCE values
-  ['pkce_verifier', 'pkce_state', 'token_response'].forEach(key => {
-    localStorage.removeItem(key);
-  });
+  clearAuthState();
 
   // Restore UI
   appHeader.classList.add('hidden');
@@ -296,6 +449,63 @@ btnLogout.addEventListener('click', () => {
   clearMarketDataConnection();
   setLivePriceText(currentSymbol, null, false);
 });
+
+function clearAuthState() {
+  tokenResponse = null;
+  authLastRefreshAt = null;
+  authLastError = null;
+  stopAuthMonitoring();
+  setAuthHealthyState(false);
+
+  ['pkce_verifier', 'pkce_state', 'token_response'].forEach(key => {
+    localStorage.removeItem(key);
+  });
+  localStorage.removeItem(REFRESH_TOKEN_BACKUP_KEY);
+}
+
+function startAuthMonitoring() {
+  stopAuthMonitoring();
+
+  authRefreshTimer = setInterval(async () => {
+    if (!tokenResponse) return;
+    try {
+      await ensureValidToken();
+    } catch {
+      // Auth health state is already updated in ensureValidToken
+    }
+  }, 30_000);
+}
+
+function stopAuthMonitoring() {
+  if (authRefreshTimer) {
+    clearInterval(authRefreshTimer);
+    authRefreshTimer = null;
+  }
+}
+
+function setAuthHealthyState(nextState) {
+  authHealthy = nextState;
+  applyTradeButtonState();
+}
+
+function getSubmitButtonClass(staged) {
+  return staged?.action === 'Buy to Open' ? 'btn-long' : 'btn-short';
+}
+
+function applyTradeButtonState() {
+  const callReady = authHealthy && !!stagedCall;
+  const putReady = authHealthy && !!stagedPut;
+
+  btnDryRunCall.disabled = !callReady;
+  btnDryRunCall.className = callReady ? 'btn-dry-run-call' : 'btn-disabled';
+  btnSubmitCall.disabled = !callReady;
+  btnSubmitCall.className = callReady ? getSubmitButtonClass(stagedCall) : 'btn-disabled';
+
+  btnDryRunPut.disabled = !putReady;
+  btnDryRunPut.className = putReady ? 'btn-dry-run-put' : 'btn-disabled';
+  btnSubmitPut.disabled = !putReady;
+  btnSubmitPut.className = putReady ? getSubmitButtonClass(stagedPut) : 'btn-disabled';
+}
 
 // Load accounts ---------------------------------------------------------------
 async function loadAccounts() {
@@ -323,6 +533,11 @@ async function submitOrder(staged, side, dryRun = false) {
 
   if (!staged || Number.isNaN(quantity) || quantity <= 0) {
     setStatus(statusEl, 'Missing symbol or quantity.', 'error');
+    return;
+  }
+
+  if (!authHealthy) {
+    setStatus(statusEl, 'Authentication is not healthy. Wait for auto-refresh or log in again.', 'error');
     return;
   }
 
@@ -407,6 +622,10 @@ async function loadChain(ticker) {
   if (!ticker) return;
 
   hasAutoScrolledToLiveStrike = false;
+  optionQuoteRenderCycle += 1;
+  optionQuoteCellsByStreamerSymbol.clear();
+  optionQuoteSubscriptions.clear();
+  optionQuoteByStreamerSymbol.clear();
 
   // Clear staged orders
   stagedCall = null;
@@ -418,9 +637,8 @@ async function loadChain(ticker) {
   callSymbolEl.textContent = 'No call selected';
   callSymbolEl.classList.add('empty');
   btnDryRunCall.disabled = true;
-  btnDryRunCall.className = 'btn-disabled';
   btnSubmitCall.disabled = true;
-  btnSubmitCall.className = 'btn-disabled';
+  applyTradeButtonState();
   setStatus(callOrderStatus, '', '');
   callOrderResponse.textContent = '';
   callOrderResponse.classList.add('hidden');
@@ -429,16 +647,15 @@ async function loadChain(ticker) {
   putSymbolEl.textContent = 'No put selected';
   putSymbolEl.classList.add('empty');
   btnDryRunPut.disabled = true;
-  btnDryRunPut.className = 'btn-disabled';
   btnSubmitPut.disabled = true;
-  btnSubmitPut.className = 'btn-disabled';
+  applyTradeButtonState();
   setStatus(putOrderStatus, '', '');
   putOrderResponse.textContent = '';
   putOrderResponse.classList.add('hidden');
   putBpReductionEl.textContent = '--';
 
   // Also clear any highlighted selections in the chain
-  document.querySelectorAll('.direction-btn.call-selected, .direction-btn.put-selected')
+  document.querySelectorAll('.quote-price.call-selected, .quote-price.put-selected')
     .forEach(el => el.classList.remove('call-selected', 'put-selected'));
 
   chainSection.classList.add('hidden');
@@ -486,8 +703,137 @@ function formatExpiry(dateStr) {
   return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+function formatOptionPrice(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue <= 0) return '--';
+  return numericValue.toFixed(2);
+}
+
+function createQuotePriceEl(side, type) {
+  const quoteEl = document.createElement('span');
+  quoteEl.className = `quote-price ${side}-${type}`;
+  quoteEl.textContent = '--';
+  return quoteEl;
+}
+
+function updateQuoteCellValue(quoteEl, value) {
+  if (!quoteEl) return;
+  quoteEl.textContent = formatOptionPrice(value);
+}
+
+function updateOptionQuoteCellsForStreamer(streamerSymbol) {
+  const refs = optionQuoteCellsByStreamerSymbol.get(streamerSymbol);
+  if (!refs || refs.size === 0) return;
+
+  const quote = optionQuoteByStreamerSymbol.get(streamerSymbol);
+  const bidPrice = quote?.bidPrice;
+  const askPrice = quote?.askPrice;
+
+  refs.forEach(ref => {
+    updateQuoteCellValue(ref.bidEl, bidPrice);
+    updateQuoteCellValue(ref.askEl, askPrice);
+  });
+}
+
+function bindOptionQuoteCell(streamerSymbol, bidEl, askEl) {
+  if (!streamerSymbol || (!bidEl && !askEl)) return;
+
+  const existing = optionQuoteCellsByStreamerSymbol.get(streamerSymbol) ?? new Set();
+  existing.add({ bidEl, askEl });
+  optionQuoteCellsByStreamerSymbol.set(streamerSymbol, existing);
+  updateOptionQuoteCellsForStreamer(streamerSymbol);
+}
+
+async function resolveOptionStreamerSymbols(optionSymbols) {
+  const resolvedMap = new Map();
+  const uniqueSymbols = Array.from(new Set(optionSymbols.filter(Boolean)));
+  if (uniqueSymbols.length === 0) return resolvedMap;
+
+  const unresolved = [];
+  uniqueSymbols.forEach(symbol => {
+    if (optionStreamerByOptionSymbol.has(symbol)) {
+      resolvedMap.set(symbol, optionStreamerByOptionSymbol.get(symbol));
+      return;
+    }
+    unresolved.push(symbol);
+  });
+
+  const chunkSize = 50;
+  for (let index = 0; index < unresolved.length; index += chunkSize) {
+    const chunk = unresolved.slice(index, index + chunkSize);
+    const query = chunk.map(symbol => `symbol[]=${encodeURIComponent(symbol)}`).join('&');
+    const response = await apiGet(`/instruments/equity-options?${query}`);
+    const items = response?.data?.items ?? [];
+
+    items.forEach(item => {
+      const optionSymbol = item?.symbol;
+      const streamerSymbol = item?.['streamer-symbol'];
+      if (!optionSymbol || !streamerSymbol) return;
+
+      optionStreamerByOptionSymbol.set(optionSymbol, streamerSymbol);
+      resolvedMap.set(optionSymbol, streamerSymbol);
+    });
+  }
+
+  uniqueSymbols.forEach(symbol => {
+    const streamerSymbol = resolvedMap.get(symbol) ?? optionStreamerByOptionSymbol.get(symbol) ?? symbol;
+    optionStreamerByOptionSymbol.set(symbol, streamerSymbol);
+    resolvedMap.set(symbol, streamerSymbol);
+  });
+
+  return resolvedMap;
+}
+
+async function ensureOptionQuoteSubscriptions(streamerSymbols) {
+  const uniqueSymbols = Array.from(new Set(streamerSymbols.filter(Boolean)));
+  if (uniqueSymbols.length === 0) return;
+
+  await ensureDxLinkReady();
+
+  const pending = uniqueSymbols.filter(symbol => !optionQuoteSubscriptions.has(symbol));
+  if (pending.length === 0) return;
+
+  sendDxLinkMessage({
+    type: 'FEED_SUBSCRIPTION',
+    channel: DXLINK_FEED_CHANNEL,
+    add: pending.map(symbol => ({ type: 'Quote', symbol })),
+  });
+
+  pending.forEach(symbol => {
+    optionQuoteSubscriptions.add(symbol);
+  });
+}
+
+async function primeOptionQuoteCells(bindings, renderCycleAtStart) {
+  if (!Array.isArray(bindings) || bindings.length === 0) return;
+
+  const optionSymbols = bindings.map(binding => binding.optionSymbol).filter(Boolean);
+  if (optionSymbols.length === 0) return;
+
+  try {
+    const streamerByOption = await resolveOptionStreamerSymbols(optionSymbols);
+    if (renderCycleAtStart !== optionQuoteRenderCycle) return;
+
+    const streamerSymbols = [];
+    bindings.forEach(binding => {
+      const streamerSymbol = streamerByOption.get(binding.optionSymbol);
+      if (!streamerSymbol) return;
+      streamerSymbols.push(streamerSymbol);
+      bindOptionQuoteCell(streamerSymbol, binding.bidEl, binding.askEl);
+    });
+
+    await ensureOptionQuoteSubscriptions(streamerSymbols);
+  } catch {
+    // Ignore quote priming errors and keep chain interactive.
+  }
+}
+
 function renderChain(expirations) {
   chainRows.innerHTML = '';
+  optionQuoteCellsByStreamerSymbol.clear();
+
+  const quoteBindings = [];
+  const renderCycleAtStart = optionQuoteRenderCycle;
 
   // Sort by expiration date
   expirations.sort((a, b) => a['expiration-date'].localeCompare(b['expiration-date']));
@@ -514,8 +860,18 @@ function renderChain(expirations) {
 
     // Column headers
     const colHeader = document.createElement('div');
-    colHeader.className = 'chain-header';
-    colHeader.innerHTML = `<span>Call</span><span>Strike</span><span>Put</span>`;
+    colHeader.className = 'chain-header chain-header-global chain-row-item';
+    colHeader.innerHTML = `
+      <div class="option-cell call-option-cell chain-header-option-cell">
+        <span class="chain-header-quote-label">Bid</span>
+        <span class="chain-header-quote-label">Ask</span>
+      </div>
+      <span class="strike-cell chain-header-strike-label">Strike</span>
+      <div class="option-cell put-option-cell chain-header-option-cell">
+        <span class="chain-header-quote-label">Bid</span>
+        <span class="chain-header-quote-label">Ask</span>
+      </div>
+    `;
     body.appendChild(colHeader);
 
     // Strike rows — data is already paired, no need to build a map
@@ -528,44 +884,60 @@ function renderChain(expirations) {
       row.className = 'chain-row-item';
       row.dataset.strikePrice = String(strikePrice);
 
-      // Call side — Long / Short
+      // Call side — Bid / Ask (clickable)
       const callCell = document.createElement('div');
-      callCell.className = 'option-cell';
+      callCell.className = 'option-cell call-option-cell';
+      const callBidEl = createQuotePriceEl('call', 'bid');
+      const callAskEl = createQuotePriceEl('call', 'ask');
       if (callSymbol) {
-        const longBtn = document.createElement('span');
-        longBtn.className = 'direction-btn long';
-        longBtn.textContent = 'Long';
-        longBtn.addEventListener('click', () => selectSymbol(callSymbol, 'call', 'long', strikePrice, longBtn));
+        callBidEl.dataset.direction = 'short';
+        callAskEl.dataset.direction = 'long';
+        callBidEl.classList.add('quote-action');
+        callAskEl.classList.add('quote-action');
+        callBidEl.addEventListener('click', () => selectSymbol(callSymbol, 'call', 'short', strikePrice, callBidEl));
+        callAskEl.addEventListener('click', () => selectSymbol(callSymbol, 'call', 'long', strikePrice, callAskEl));
 
-        const shortBtn = document.createElement('span');
-        shortBtn.className = 'direction-btn short';
-        shortBtn.textContent = 'Short';
-        shortBtn.addEventListener('click', () => selectSymbol(callSymbol, 'call', 'short', strikePrice, shortBtn));
+        callCell.appendChild(callBidEl);
+        callCell.appendChild(callAskEl);
 
-        callCell.appendChild(longBtn);
-        callCell.appendChild(shortBtn);
+        quoteBindings.push({
+          optionSymbol: callSymbol,
+          bidEl: callBidEl,
+          askEl: callAskEl,
+        });
+      } else {
+        callCell.appendChild(callBidEl);
+        callCell.appendChild(callAskEl);
       }
 
       const strikeEl = document.createElement('span');
       strikeEl.className = 'strike-cell';
       strikeEl.textContent = strikePrice.toFixed(0);
 
-      // Put side — Long / Short
+      // Put side — Bid / Ask (clickable)
       const putCell = document.createElement('div');
       putCell.className = 'option-cell put-option-cell';
+      const putBidEl = createQuotePriceEl('put', 'bid');
+      const putAskEl = createQuotePriceEl('put', 'ask');
       if (putSymbol) {
-        const longBtn = document.createElement('span');
-        longBtn.className = 'direction-btn long';
-        longBtn.textContent = 'Long';
-        longBtn.addEventListener('click', () => selectSymbol(putSymbol, 'put', 'long', strikePrice, longBtn));
+        putBidEl.dataset.direction = 'short';
+        putAskEl.dataset.direction = 'long';
+        putBidEl.classList.add('quote-action');
+        putAskEl.classList.add('quote-action');
+        putBidEl.addEventListener('click', () => selectSymbol(putSymbol, 'put', 'short', strikePrice, putBidEl));
+        putAskEl.addEventListener('click', () => selectSymbol(putSymbol, 'put', 'long', strikePrice, putAskEl));
 
-        const shortBtn = document.createElement('span');
-        shortBtn.className = 'direction-btn short';
-        shortBtn.textContent = 'Short';
-        shortBtn.addEventListener('click', () => selectSymbol(putSymbol, 'put', 'short', strikePrice, shortBtn));
+        putCell.appendChild(putBidEl);
+        putCell.appendChild(putAskEl);
 
-        putCell.appendChild(longBtn);
-        putCell.appendChild(shortBtn);
+        quoteBindings.push({
+          optionSymbol: putSymbol,
+          bidEl: putBidEl,
+          askEl: putAskEl,
+        });
+      } else {
+        putCell.appendChild(putBidEl);
+        putCell.appendChild(putAskEl);
       }
 
       row.appendChild(callCell);
@@ -592,6 +964,8 @@ function renderChain(expirations) {
   });
 
   chainSection.classList.remove('hidden');
+
+  primeOptionQuoteCells(quoteBindings, renderCycleAtStart);
 
   requestAnimationFrame(() => {
     maybeAutoScrollChainToLivePrice();
@@ -674,7 +1048,7 @@ function scrollOpenChainBodyToNearestStrike() {
     if (!Number.isFinite(strikePrice)) return;
 
     // Adding 8 allows the scroll to account for the difference in row height
-    const diff = Math.abs(strikePrice - currentLiveQuotePrice + 8);
+    const diff = Math.abs(strikePrice - currentLiveQuotePrice + 6);
     if (diff < nearestDiff) {
       nearestDiff = diff;
       nearestRow = row;
@@ -716,10 +1090,7 @@ function selectSymbol(symbol, side, direction, strikePrice, el) {
     callSymbolEl.textContent = label;
     callSymbolEl.classList.remove('empty');
     callActionEl.textContent = actionLabel;
-    btnSubmitCall.className = direction === 'long' ? 'btn-long' : 'btn-short';
-    btnDryRunCall.disabled = false;
-    btnDryRunCall.className = 'btn-dry-run-call';
-    btnSubmitCall.disabled = false;
+    applyTradeButtonState();
     setStatus(callOrderStatus, '', '');
     callOrderResponse.textContent = '';
     callOrderResponse.classList.add('hidden');
@@ -730,10 +1101,7 @@ function selectSymbol(symbol, side, direction, strikePrice, el) {
     putSymbolEl.textContent = label;
     putSymbolEl.classList.remove('empty');
     putActionEl.textContent = actionLabel;
-    btnSubmitPut.className = direction === 'long' ? 'btn-long' : 'btn-short';
-    btnDryRunPut.disabled = false;
-    btnDryRunPut.className = 'btn-dry-run-put';
-    btnSubmitPut.disabled = false;
+    applyTradeButtonState();
     setStatus(putOrderStatus, '', '');
     putOrderResponse.textContent = '';
     putOrderResponse.classList.add('hidden');
@@ -763,19 +1131,7 @@ async function resolveOptionStreamerSymbol(optionSymbol) {
 }
 
 async function ensureOptionQuoteSubscription(streamerSymbol) {
-  if (!streamerSymbol) return;
-
-  await ensureDxLinkReady();
-  if (optionQuoteSubscriptions.has(streamerSymbol)) return;
-
-  sendDxLinkMessage({
-    type: 'FEED_SUBSCRIPTION',
-    channel: DXLINK_FEED_CHANNEL,
-    add: [
-      { type: 'Quote', symbol: streamerSymbol },
-    ],
-  });
-  optionQuoteSubscriptions.add(streamerSymbol);
+  await ensureOptionQuoteSubscriptions([streamerSymbol]);
 }
 
 function getOptionQuoteFromCache(streamerSymbol) {
@@ -952,16 +1308,16 @@ function extractBuyingPowerReduction(result) {
 // Order quantity listeners ---------------------------------------------------
 document.getElementById('quantity').addEventListener('change', () => {
   if (stagedCall) {
-    const el = document.querySelector('.direction-btn.call-selected');
+    const el = document.querySelector('.quote-price.call-selected');
     if (el) {
-      const direction = el.textContent.toLowerCase() === 'long' ? 'long' : 'short';
+      const direction = el.dataset.direction === 'short' ? 'short' : 'long';
       selectSymbol(stagedCall.symbol, 'call', direction, stagedCall.strikePrice, el);
     }
   }
   if (stagedPut) {
-    const el = document.querySelector('.direction-btn.put-selected');
+    const el = document.querySelector('.quote-price.put-selected');
     if (el) {
-      const direction = el.textContent.toLowerCase() === 'long' ? 'long' : 'short';
+      const direction = el.dataset.direction === 'short' ? 'short' : 'long';
       selectSymbol(stagedPut.symbol, 'put', direction, stagedPut.strikePrice, el);
     }
   }
@@ -1039,6 +1395,7 @@ function clearMarketDataConnection() {
   hasAutoScrolledToLiveStrike = false;
   optionQuoteByStreamerSymbol.clear();
   optionQuoteSubscriptions.clear();
+  optionQuoteCellsByStreamerSymbol.clear();
   setConnectionState(false);
 }
 
@@ -1157,6 +1514,7 @@ function handleDxLinkFeedData(rawData) {
           askPrice,
           updatedAt: Date.now(),
         });
+        updateOptionQuoteCellsForStreamer(eventSymbol);
       }
 
       if (eventSymbol !== selectedStreamerSymbol) return;
@@ -1386,10 +1744,8 @@ btnSubmitPut.addEventListener('click', () => submitOrder(stagedPut, 'put', false
 
 // API Helpers ---------------------------------------------------------------
 async function apiGet(path) {
-  await ensureValidToken();
-  const resp = await fetch(`${getConfig().baseUrl}${path}`, {
+  const resp = await fetchWithAuth(path, {
     headers: {
-      'Authorization': `Bearer ${tokenResponse.access_token}`,
       'Accept': 'application/json',
     }
   });
@@ -1403,11 +1759,9 @@ async function apiGet(path) {
 }
 
 async function apiPost(path, body) {
-  await ensureValidToken();
-  const resp = await fetch(`${getConfig().baseUrl}${path}`, {
+  const resp = await fetchWithAuth(path, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${tokenResponse.access_token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
@@ -1434,6 +1788,52 @@ async function apiPost(path, body) {
   }
 
   return resp.json();
+}
+
+async function fetchWithAuth(path, init, retryOnUnauthorized = true) {
+  await ensureValidToken();
+
+  const requestInit = {
+    ...init,
+    headers: {
+      ...(init?.headers ?? {}),
+      'Authorization': `Bearer ${tokenResponse.access_token}`,
+    },
+  };
+
+  const response = await fetch(`${getConfig().baseUrl}${path}`, requestInit);
+  authDebug('fetchWithAuth: API response received', {
+    path,
+    method: requestInit?.method ?? 'GET',
+    status: response.status,
+    retryOnUnauthorized,
+  });
+
+  if (response.status === 401 && retryOnUnauthorized && tokenResponse?.refresh_token) {
+    authDebug('fetchWithAuth: got 401, forcing refresh and retry', {
+      path,
+      method: requestInit?.method ?? 'GET',
+    });
+    await ensureValidToken({ forceRefresh: true });
+
+    const retryInit = {
+      ...init,
+      headers: {
+        ...(init?.headers ?? {}),
+        'Authorization': `Bearer ${tokenResponse.access_token}`,
+      },
+    };
+
+    const retryResponse = await fetch(`${getConfig().baseUrl}${path}`, retryInit);
+    authDebug('fetchWithAuth: retry response received', {
+      path,
+      method: retryInit?.method ?? 'GET',
+      status: retryResponse.status,
+    });
+    return retryResponse;
+  }
+
+  return response;
 }
 
 // Utility -------------------------------------------------------------------

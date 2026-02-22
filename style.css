@@ -5,7 +5,7 @@ body {
   background: #0f1117;
   color: #e2e8f0;
   padding: 2rem;
-  max-width: 640px;
+  max-width: 760px;
   margin: 0 auto;
 }
 
@@ -34,11 +34,11 @@ input:focus, select:focus { outline: none; border-color: #6366f1; }
 .button-row { display: flex; gap: 1rem; margin-top: .5rem; }
 
 button {
-  padding: .6rem 1.4rem;
+  padding: .6rem 0.4rem;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 400;
   background: #6366f1;
   color: white;
   font-size: .95rem;
@@ -89,9 +89,6 @@ header {
   color: white;
   border: none;
   border-radius: 4px;
-  padding: .6rem 1.4rem;
-  font-weight: 600;
-  font-size: .95rem;
   cursor: pointer;
 }
 
@@ -102,9 +99,6 @@ header {
   color: white;
   border: none;
   border-radius: 4px;
-  padding: .6rem 1.4rem;
-  font-weight: 600;
-  font-size: .95rem;
   cursor: pointer;
 }
 
@@ -138,11 +132,6 @@ header {
 #quantity {
   width: 65px;
   text-align: center;
-}
-
-#account-select {
-  width: 194px;
-  text-align: left;
 }
 
 .symbol-buttons {
@@ -295,6 +284,8 @@ header {
 }
 
 .chain-grid {
+  --chain-quote-col: 56px;
+  --chain-col-gap: .4rem;
   border: 1px solid #2d3348;
   border-radius: 4px;
   overflow: hidden;
@@ -303,7 +294,6 @@ header {
 
 .chain-header {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
   background: #0f1117;
   padding: .5rem 1rem;
   font-size: .8rem;
@@ -312,7 +302,44 @@ header {
   letter-spacing: .05em;
 }
 
+.chain-header-global {
+  grid-template-columns: 1fr auto 1fr;
+}
+
+.chain-header-expiry {
+  grid-template-columns: 1fr auto 1fr;
+}
+
+.chain-header-expiry span:nth-child(2) {
+  text-align: right;
+  justify-self: end;
+}
+
+.chain-header-option-cell {
+  min-height: 0;
+}
+
+.chain-header-quote-label {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: right;
+  justify-self: stretch;
+  margin: 0;
+  padding: 0;
+}
+
+.chain-header-strike-label {
+  text-align: center;
+  justify-self: center;
+}
+
 .chain-header span:last-child { text-align: right; }
+
+.chain-header.chain-row-item {
+  border-top: none;
+  min-height: 0;
+}
 
 .chain-row-item {
   display: grid;
@@ -387,32 +414,58 @@ header {
 .put-cell { text-align: right; width: 100%; display: block; }
 
 .option-cell {
-  display: flex;
-  gap: .4rem;
+  display: grid;
+  column-gap: var(--chain-col-gap);
   align-items: center;
+  min-height: 28px;
+}
+
+.call-option-cell {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: stretch;
+  padding-right: calc(.5rem + 50px);
 }
 
 .put-option-cell {
-  justify-content: flex-end;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: stretch;
 }
 
-.direction-btn {
-  font-size: .75rem;
-  font-weight: 600;
-  padding: .2rem 1.6rem;
-  border-radius: 3px;
+.quote-price {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: right;
+  justify-self: stretch;
+  margin: 0;
+  padding: 0;
+  font-size: .76rem;
+  font-variant-numeric: tabular-nums;
+  color: #94a3b8;
+}
+
+.quote-price.quote-action {
   cursor: pointer;
-  user-select: none;
+  border-radius: 3px;
+  padding: .2rem .3rem;
 }
 
-.direction-btn.long  { color: #86efac; background: #14532d33; }
-.direction-btn.short { color: #fca5a5; background: #45090933; margin-left: 1rem; }
+.quote-price.quote-action:hover {
+  background: #2d3348;
+}
 
-.direction-btn.long:hover  { background: #14532d; }
-.direction-btn.short:hover { background: #450a0a; }
+.call-bid,
+.put-bid {
+  color: #86efac;
+}
 
-.direction-btn.call-selected,
-.direction-btn.put-selected {
+.call-ask,
+.put-ask {
+  color: #fca5a5;
+}
+
+.quote-price.call-selected,
+.quote-price.put-selected {
   outline: 1px solid #6366f1;
 }
 
@@ -481,6 +534,12 @@ header {
 
 .expiry-body.open { display: block; }
 
+.expiry-body .chain-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
 .staged-orders {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -496,6 +555,34 @@ header {
   display: flex;
   flex-direction: column;
   gap: .6rem;
+}
+
+.staged-card-layout {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: .75rem;
+  align-items: start;
+}
+
+.staged-card-fields {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.staged-button-column {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.staged-button-column button {
+  width: 100%;
+}
+
+.staged-card-status {
+  margin-top: 0;
+  width: 100%;
 }
 
 .staged-card-header {
@@ -547,4 +634,8 @@ header {
   font-size: .85rem;
   font-weight: 700;
   color: #e2e8f0;
+}
+
+#btn-logout {
+  padding: .4rem 1.4rem;
 }

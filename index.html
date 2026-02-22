@@ -59,11 +59,6 @@
     <!-- ── Option Chain Display ── -->
     <div id="chain-section" class="hidden">
       <div id="chain-grid" class="chain-grid">
-        <div class="chain-header">
-          <span>Call</span>
-          <span>Strike</span>
-          <span>Put</span>
-        </div>
         <div id="chain-rows"></div>
       </div>
     </div>
@@ -78,34 +73,42 @@
         <!-- Call Order -->
         <div class="staged-card" id="call-card">
           <div class="staged-card-header call-header">Call</div>
-          <div class="staged-symbol" id="call-symbol">No call selected</div>
-          <div class="staged-action" id="call-action"></div>
-          <div class="bp-impact-row">
-            <span class="bp-label">Estimated BPR</span>
-            <span class="bp-value" id="call-bp-reduction">--</span>
+          <div class="staged-card-layout">
+            <div class="staged-card-fields">
+              <div class="staged-symbol" id="call-symbol">No call selected</div>
+              <div class="staged-action" id="call-action"></div>
+              <div class="bp-impact-row">
+                <span class="bp-label">BPR</span>
+                <span class="bp-value" id="call-bp-reduction">--</span>
+              </div>
+            </div>
+            <div class="staged-button-column">
+              <button class="btn-disabled" id="btn-submit-call" disabled>Submit</button>
+              <button class="btn-disabled" id="btn-dry-run-call" disabled>Dry Run</button>
+            </div>
           </div>
-          <div class="button-row">
-            <button class="btn-disabled" id="btn-dry-run-call" disabled>Dry Run</button>
-            <button class="btn-disabled" id="btn-submit-call" disabled>Submit</button>
-          </div>
-          <div id="call-order-status" class="status"></div>
+          <div id="call-order-status" class="status staged-card-status"></div>
           <pre id="call-order-response" class="hidden"></pre>
         </div>
 
         <!-- Put Order -->
         <div class="staged-card" id="put-card">
           <div class="staged-card-header put-header">Put</div>
-          <div class="staged-symbol" id="put-symbol">No put selected</div>
-          <div class="staged-action" id="put-action"></div>
-          <div class="bp-impact-row">
-            <span class="bp-label">Estimated BPR</span>
-            <span class="bp-value" id="put-bp-reduction">--</span>
+          <div class="staged-card-layout">
+            <div class="staged-card-fields">
+              <div class="staged-symbol" id="put-symbol">No put selected</div>
+              <div class="staged-action" id="put-action"></div>
+              <div class="bp-impact-row">
+                <span class="bp-label">BPR</span>
+                <span class="bp-value" id="put-bp-reduction">--</span>
+              </div>
+            </div>
+            <div class="staged-button-column">
+              <button class="btn-disabled" id="btn-submit-put" disabled>Submit</button>
+              <button class="btn-disabled" id="btn-dry-run-put" disabled>Dry Run</button>
+            </div>
           </div>
-          <div class="button-row">
-            <button class="btn-disabled" id="btn-dry-run-put" disabled>Dry Run</button>
-            <button class="btn-disabled" id="btn-submit-put" disabled>Submit</button>
-          </div>
-          <div id="put-order-status" class="status"></div>
+          <div id="put-order-status" class="status staged-card-status"></div>
           <pre id="put-order-response" class="hidden"></pre>
         </div>
 
