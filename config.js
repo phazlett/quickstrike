@@ -30,4 +30,4 @@ const REDIRECT_URI = 'http://localhost:5500';
 
 // Set this to true to use the TastyTrade demo (sandbox) environment.
 // Set this to false to use the TastyTrade live (real orders) environment.
-let useSandbox = false;
+let useSandbox = true;
