@@ -5,12 +5,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QuickStrike for TastyTrade</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="lib/style.css" />
   <link rel="icon" href="data:,">
 </head>
 
 <body>
   <input type="hidden" id="option-symbol" />
+
+  <section id="loading-section" class="loading-section hidden">
+    <div class="loading-card">
+      <h2 id="loading-message">Loading...</h2>
+      <div id="loading-error" class="status hidden"></div>
+      <button id="btn-loading-retry" class="hidden">Retry</button>
+    </div>
+  </section>
 
   <!-- ── HEADER ── (hidden until authenticated) -->
   <header id="app-header" class="hidden">
@@ -65,7 +73,6 @@
 
     <!-- ── Order Panel ── -->
     <div id="order-section">
-      <h2>Staged Orders</h2>
       <div id="env-badge"></div>
 
       <div class="staged-orders">
@@ -82,13 +89,11 @@
                 <span class="bp-value" id="call-bp-reduction">--</span>
               </div>
             </div>
-            <div class="staged-button-column">
+            <div>
               <button class="btn-disabled" id="btn-submit-call" disabled>Submit</button>
-              <button class="btn-disabled" id="btn-dry-run-call" disabled>Dry Run</button>
             </div>
           </div>
           <div id="call-order-status" class="status staged-card-status"></div>
-          <pre id="call-order-response" class="hidden"></pre>
         </div>
 
         <!-- Put Order -->
@@ -103,21 +108,45 @@
                 <span class="bp-value" id="put-bp-reduction">--</span>
               </div>
             </div>
-            <div class="staged-button-column">
+            <div>
               <button class="btn-disabled" id="btn-submit-put" disabled>Submit</button>
-              <button class="btn-disabled" id="btn-dry-run-put" disabled>Dry Run</button>
             </div>
           </div>
           <div id="put-order-status" class="status staged-card-status"></div>
-          <pre id="put-order-response" class="hidden"></pre>
         </div>
 
       </div>
+
+    </div>
+
+    <div id="positions-section">
+      <h2>Positions</h2>
+      <div class="positions-table-wrap">
+        <table class="positions-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Quantity</th>
+              <th>Expiration</th>
+              <th>Strike</th>
+              <th>P/L</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="positions-rows"></tbody>
+        </table>
+      </div>
+      <div id="positions-status" class="status"></div>
     </div>
   </section>
 
   <script src="config.js"></script>
-  <script src="app.js"></script>
+  <script src="lib/positions-manager.js"></script>
+  <script src="lib/api-client.js"></script>
+  <script src="lib/dxlink-manager.js"></script>
+  <script src="lib/auth-manager.js"></script>
+  <script src="lib/bootstrap-manager.js"></script>
+  <script src="lib/app.js"></script>
 </body>
 
 </html>
