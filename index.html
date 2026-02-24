@@ -58,11 +58,12 @@
   <section id="config-section">
     <h2>QuickStrike for TastyTrade</h2>
     <button id="btn-connect">Login with TastyTrade</button>
-    <div id="auth-status" class="status"></div>
   </section>
 
   <!-- ── TRADING ── (hidden until authenticated) -->
   <section id="trading-section" class="hidden">
+
+    <div id="status-message" class="status"></div>
 
     <!-- ── Option Chain Display ── -->
     <div id="chain-section" class="hidden">
@@ -93,7 +94,6 @@
               <button class="btn-disabled" id="btn-submit-call" disabled>Submit</button>
             </div>
           </div>
-          <div id="call-order-status" class="status staged-card-status"></div>
         </div>
 
         <!-- Put Order -->
@@ -112,7 +112,6 @@
               <button class="btn-disabled" id="btn-submit-put" disabled>Submit</button>
             </div>
           </div>
-          <div id="put-order-status" class="status staged-card-status"></div>
         </div>
 
       </div>
@@ -136,7 +135,6 @@
           <tbody id="positions-rows"></tbody>
         </table>
       </div>
-      <div id="positions-status" class="status"></div>
     </div>
   </section>
 
