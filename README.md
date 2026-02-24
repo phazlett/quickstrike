@@ -1,6 +1,8 @@
 # QuickStrike for TastyTrade
 TastyTrade is a great options trading platform, but it's not built for daytraders that want to trade options. This project address that limitation for SPY and XSP options. QuickStrike is a lightweight browser app for fast options execution with TastyTrade OAuth authentication, live quote streaming, option-chain selection, buying-power reduction estimates, and positions management. You can enter and exit any SPY or XSP without any prompts for confirmations. A trade can be opened and closed in mere seconds which is perfect for the Tasty daytrader that is addicted to scalping the S&P 500.
 
+![QuickStrike screenshot](screenshot.png)
+
 ## Features
 
 - OAuth login with PKCE (TastyTrade)
