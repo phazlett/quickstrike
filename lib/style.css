@@ -291,6 +291,10 @@ header {
   padding: 0;
 }
 
+.chain-header .put-option-cell .chain-header-quote-label {
+  padding-right: 5px;
+}
+
 .chain-header-strike-label {
   text-align: center;
   justify-self: center;
@@ -450,12 +454,12 @@ header {
 
 .expiry-body {
   display: none;
-  border: 1px solid #2d3348;
+  border: none;
   border-top: none;
   border-radius: 0 0 4px 4px;
   margin-bottom: .5rem;
   overflow-y: auto;
-  max-height: 315px;
+  max-height: 445px;
 }
 
 .expiry-body.open { display: block; }
