@@ -1,16 +1,16 @@
 # QuickStrike for TastyTrade
-QuickStrike is a lightweight browser app for fast options execution with TastyTrade OAuth authentication, live quote streaming, option-chain selection, buying-power reduction estimates, and positions management.
+TastyTrade is a great options trading platform, but it's not built for daytraders that want to trade options. This project address that limitation for SPY and XSP options. QuickStrike is a lightweight browser app for fast options execution with TastyTrade OAuth authentication, live quote streaming, option-chain selection, buying-power reduction estimates, and positions management. You can enter and exit any SPY or XSP without any prompts for confirmations. A trade can be opened and closed in mere seconds which is perfect for the Tasty daytrader that is addicted to scalping the S&P 500.
 
 ## Features
 
 - OAuth login with PKCE (TastyTrade)
 - Sandbox or live environment support
-- Fast call/put staging from option-chain bid/ask clicks
-- Market order submission for selected call/put leg
-- Real-time underlying price and chain ATM marker behavior
-- Positions table with real-time unrealized P/L updates
-- One-click close action for open positions
-- Startup loading screen with retry on initialization errors
+- Option chain updates in real-time
+- Fast call/put staging from option-chain by clicking on any bid/ask price
+- One-click market order entry
+- One-click to close open positions
+- Open positions with real-time unrealized P/L
+- Built with no external libraries or dependencies
 
 ## Important safety note
 
@@ -25,14 +25,16 @@ To create OAuth credentials for both Sandbox and Live environments, follow the o
 
 - https://support.tastytrade.com/support/s/solutions/articles/43000700385
 
-**IMPORTANT**: When setting up your credentials for both environments, you will see a setting called "Redirect URL". Use http://localhost:550 for this.
+**IMPORTANT**: When setting up your credentials for both environments, you will see a setting called "Redirect URL". Use http://localhost:5500 for this.
 
 ### Setup checklist
 - Python 3 installed (used by local static server scripts)
+  - Windows install: download Python from https://www.python.org/downloads/windows/
+  - During installation on Windows, enable **Add python.exe to PATH**
 - Add your TastyTrade API credentials to config.js in
 	- Sandbox: `SANDBOX_CLIENT_ID` and `SANDBOX_CLIENT_SECRET`
 	- Live: `LIVE_CLIENT_ID` and `LIVE_CLIENT_SECRET`
-- A redirect URI configured in your OAuth app to match your local URL (default in this project: `http://localhost:5500`)
+- Ensure that your TastyTrade OAuth app is configured with a redirect URI that matches http://localhost:5500
 
 ## Configure the app
 
