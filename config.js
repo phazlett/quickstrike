@@ -17,12 +17,17 @@
        make a bad trade.
  */
 
-const CLIENT_ID = 'YOUR-TASTYTRADE-OAUTH-CLIENT-ID';
-const CLIENT_SECRET = 'YOUR-TASTYTRADE-OAUTH-CLIENT-SECRET';
+// Sandbox (test) environment credentials. These are required if useSandbox is true.
+const SANDBOX_CLIENT_ID = 'SANDBOX-TASTYTRADE-OAUTH-CLIENT-ID';
+const SANDBOX_CLIENT_SECRET = 'SANDBOX-TASTYTRADE-OAUTH-CLIENT-SECRET';
+
+// Live (real orders) environment credentials. These are required if useSandbox is false.
+const LIVE_CLIENT_ID = 'LIVE-TASTYTRADE-OAUTH-CLIENT-ID';
+const LIVE_CLIENT_SECRET = 'LIVE-TASTYTRADE-OAUTH-CLIENT-SECRET';
 
 // This value must match the redirect URI of your TastyTrade OAuth app
 const REDIRECT_URI = 'http://localhost:5500';
 
 // Set this to true to use the TastyTrade demo (sandbox) environment.
 // Set this to false to use the TastyTrade live (real orders) environment.
-let useSandbox = true;
+let useSandbox = false;
