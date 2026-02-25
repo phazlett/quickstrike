@@ -261,10 +261,17 @@ header {
 .chain-grid {
   --chain-quote-col: 56px;
   --chain-col-gap: .4rem;
+  --chain-list-height: 445px;
   border: 1px solid #2d3348;
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 1rem;
+  height: var(--chain-list-height);
+}
+
+#chain-rows {
+  height: 100%;
+  overflow-y: auto;
 }
 
 .chain-header {
@@ -462,8 +469,8 @@ header {
   border-top: none;
   border-radius: 0 0 4px 4px;
   margin-bottom: .5rem;
-  overflow-y: auto;
-  max-height: 445px;
+  overflow-y: visible;
+  max-height: none;
 }
 
 .expiry-body.open { display: block; }
