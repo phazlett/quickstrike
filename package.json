@@ -1,0 +1,14 @@
+{
+  "name": "quickstrike-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "QuickStrike desktop app powered by Electron",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "desktop:start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^34.0.0"
+  }
+}

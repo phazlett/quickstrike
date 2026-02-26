@@ -62,6 +62,13 @@ Set these values:
 
 From the project root:
 
+### Electron desktop app (recommended)
+
+```bash
+npm install
+npm start
+```
+
 ### macOS / Linux
 
 ```bash
@@ -77,6 +84,8 @@ serve.bat
 Then navigate to:
 
 - `http://localhost:5500`
+
+When running via Electron, the app opens in a desktop window and hosts itself on `http://localhost:5500` internally.
 
 ## Typical workflow
 
@@ -94,6 +103,7 @@ Then navigate to:
 	- `tastytrade.config.js`
 	- `ibkr.config.js`
 - `index.html` (root): user interface
+- `electron/main.js` (root): Electron main process + local static server
 - `serve.sh`, `serve.bat` (root): start scripts for Windows, Mac, and Linux
 - `lib/` (root): runtime files
 	- `app.js`

@@ -337,6 +337,7 @@ header {
 #chain-rows {
   height: 100%;
   overflow-y: auto;
+  position: relative;
 }
 
 .chain-header {
@@ -496,6 +497,9 @@ header {
   margin-bottom: 2px;
   cursor: pointer;
   user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 6;
 }
 
 .expiry-header:hover { background: #1a1f2e; }
@@ -542,8 +546,8 @@ header {
 
 .expiry-body .chain-header {
   position: sticky;
-  top: 0;
-  z-index: 3;
+  top: 42px;
+  z-index: 4;
 }
 
 .staged-orders {
