@@ -6,8 +6,9 @@
 window.ADAPTER_CONFIGS = window.ADAPTER_CONFIGS || {};
 
 window.ADAPTER_CONFIGS.ibkr = {
-  paper: {
-  },
-  live: {
-  },
+    ibGatewayLivePort: 4001,
+    ibGatewayPaperPort: 4002,
+    twsLivePort: 7497,
+    twsPaperPort: 7496,
+  suppressDisconnectStateLogs: true,
 };

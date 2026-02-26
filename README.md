@@ -2,29 +2,31 @@
 Allows you to trade SPY and XSP options using streamlined interfaces. No prompts. No complexity. Just fast trade executions. QuickStrike is a lightweight browser app for fast options execution. The application leverages a data abstraction layer, allowing more broker API to be integrated. The application features OAuth authentication, live quote streaming, option-chain selection, buying-power reduction estimates, and positions management. You can enter and exit any SPY or XSP option position without any prompts for confirmations. A trade can be opened and closed in mere seconds.
 
 Currently supported trading plaform APIs are
+- Interactive Brokers (Trader Workstation and IB Gateway)
 - TastyTrade
-- Interactive Brokers (planned)
 
 ![QuickStrike screenshot](screenshot.png)
 
 ## Features
 
-- OAuth login with PKCE
-- Sandbox or live environment support
+- OAuth login with PKCE and direct IBKR connections
+- Paper or live trading
 - Option chain updates in real-time
 - Fast call/put staging from option-chain by clicking on any bid/ask price
 - One-click market order entry
 - One-click to close open positions
 - Open positions with real-time unrealized P/L
-- Built with no external libraries or dependencies
 
 ## Important safety note
 
-- If `useSandbox` is `false`, orders are live and can execute in your real account.
-- Start in sandbox first and verify behavior before enabling live trading.
+- Start in paper mode first and verify behavior before enabling live trading.
 
 ## Using with Interactive Brokers
-[Copy to come]
+> You can use either Trader Workstation or IB Gateway. The start screen displays a lisst of prerequisites for required settings in IBKR. Pay close attention to these settings and configure your IBKR settings as noted.
+>
+> IBKR must be running and logged in before using this app.
+>
+> Market data subscriptions and a funded account are required.
 
 ## Using with TastyTrade
 
@@ -32,110 +34,79 @@ Currently supported trading plaform APIs are
 >
 >To create OAuth credentials for both Sandbox and Live environments, follow the official TastyTrade instructions:
 >
->- https://support.tastytrade.com/support/s/solutions/articles/43000700385
+>https://support.tastytrade.com/support/s/solutions/articles/43000700385
 >
->**IMPORTANT**: When setting up your credentials for both environments, you will see a setting called "Redirect URL". Use http://localhost:5500 for this.
+>**IMPORTANT**
 >
->### Setup checklist
->- Python 3 installed (used by local static server scripts)
->  - Windows install: download Python from https://www.python.org/downloads/windows/
->  - During installation on Windows, enable **Add python.exe to PATH**
->- Add your TastyTrade API credentials in `config/adapters/tastytrade.config.js` under
->	- Sandbox: `sandbox.clientId` and `sandbox.clientSecret`
->	- Live: `live.clientId` and `live.clientSecret`
->- Ensure that your TastyTrade OAuth app is configured with a redirect URI that matches http://localhost:5500
+>When setting up your TastyTrade OAuth app, you will see a setting called "Redirect URL". Use http://localhost:5500 for this.
 
-## Configure the app
-
-Edit these config files:
-
-- `config.js` (shared runtime settings such as `activeAdapter` and `useSandbox`)
-- `config/adapters/<adapter>.config.js` (adapter-specific endpoints and credentials)
-
-Set these values:
-
-- `activeAdapter` (currently `tastytrade`)
-- `useSandbox` (`true` for sandbox, `false` for live)
-- `config/adapters/<adapter>.config.js` (for your platform)
-
-## Run locally
-
-From the project root:
-
-### Electron desktop app (recommended)
+## Command Line Statup
 
 ```bash
 npm install
 npm start
 ```
 
-### macOS / Linux
+## Build installers for distribution
+
+QuickStrike can be packaged as installable desktop apps (DMG/ZIP for macOS, NSIS installer for Windows, AppImage for Linux).
 
 ```bash
-bash serve.sh
+npm install
+npm run build
 ```
 
-### Windows
+Targeted builds:
 
-```bat
-serve.bat
+```bash
+npm run build -- mac --arm64
+npm run build -- mac --x64
+npm run build -- mac --universal
+npm run build -- win
+npm run build -- linux
 ```
 
-Then navigate to:
+Other useful options:
 
-- `http://localhost:5500`
+```bash
+npm run build -- all
+npm run build -- mac --dir
+```
 
-When running via Electron, the app opens in a desktop window and hosts itself on `http://localhost:5500` internally.
+Build artifacts are written to `dist/`.
 
-## Typical workflow
+After successful installer builds, temporary/intermediate build artifacts in `dist/` are automatically cleaned up.
 
-1. Click **Login** to sign in with the broker configured by `activeAdapter`.
-2. Select symbol (`SPY` / `XSP`), quantity, and account.
-3. Click chain bid/ask values to stage call/put orders.
-4. Review staged order.
-5. Submit order. **IMPORTANT: there are no confirmation prompts. Clicking 'Submit' sends the order to your broker.**
-6. Monitor positions and use **Close** when needed.
+To keep all intermediate files, use:
+
+```bash
+npm run build -- mac --no-cleanup
+```
+
+### Release workflow (recommended)
+
+1. Build installers on each target OS (or via CI matrix).
+2. Upload artifacts from `dist/` to a GitHub Release.
+3. Share the release page URL with users for download/install.
+
+### Notes for production distribution
+
+- macOS: use Apple Developer signing + notarization to avoid Gatekeeper warnings.
+- Windows: use code signing to reduce SmartScreen warnings.
+- Linux: AppImage usually runs unsigned, but signing is still recommended.
 
 ## Project structure
 
 - `config.js` (root): shared runtime config (active adapter, environment)
 - `config/adapters/` (root): adapter-specific config files
-	- `tastytrade.config.js`
 	- `ibkr.config.js`
+	- `tastytrade.config.js`
 - `index.html` (root): user interface
-- `electron/main.js` (root): Electron main process + local static server
-- `serve.sh`, `serve.bat` (root): start scripts for Windows, Mac, and Linux
-- `lib/` (root): runtime files
-	- `app.js`
-	- `bootstrap-manager.js`
-	- `auth-manager.js`
-	- `api-client.js`
-	- `tastytrade-market-data-manager.js`
-	- `positions-manager.js`
-	- `style.css`
-
-When distributing this project, treat `lib/` as internal runtime code and direct users to edit only files in the `config/` area.
-
-## Troubleshooting
-
-### Port 5500 already in use
-
-- Stop the process using port `5500`, then re-run `serve.sh` / `serve.bat`.
-
-### OAuth redirect mismatch
-
-- Ensure `redirectUri` in your active adapter config file (`config/adapters/<adapter>.config.js`) exactly matches the redirect URI in your broker OAuth app settings.
-
-### Stuck on loading / startup error
-
-- Use the **Retry** button on the loading screen.
-- Re-check credentials/endpoints in your active adapter config file and environment toggle in `config.js`.
-- Confirm network access to your broker endpoints.
-
-### No positions shown
-
-- Positions are filtered by selected underlying symbol and open quantity.
-- Change symbol (`SPY` / `XSP`) and account to verify expected matches.
+- `electron/` (root): Electron support
+	- `ibkr-ipc.js` (root): IBKR service bridge using `@stoqey/ibkr`
+	- `main.js` (root): Electron main process + local static server
+	- `preload.js` (root): secure renderer bridge for Electron IPC
+- `lib/*` (root): runtime files
 
 ## License
 

@@ -1,12 +1,14 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { registerIbkrIpcHandlers } = require('./ibkr-ipc');
 
 const HOST = 'localhost';
 const PORT = 5500;
 
 let staticServer = null;
+let mainWindow = null;
 
 function getContentType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -83,10 +85,18 @@ function createMainWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
   win.loadURL(`http://${HOST}:${PORT}`);
+  mainWindow = win;
+
+  win.on('closed', () => {
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
+  });
 }
 
 async function bootstrap() {
@@ -102,6 +112,13 @@ async function bootstrap() {
     app.quit();
     return;
   }
+
+  registerIbkrIpcHandlers({
+    ipcMain,
+    getMainWindowProvider: () => mainWindow,
+  });
+
+  ipcMain.handle('app:getVersion', () => app.getVersion());
 
   createMainWindow();
 

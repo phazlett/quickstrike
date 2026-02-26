@@ -1,14 +1,71 @@
 {
   "name": "quickstrike-desktop",
   "version": "1.0.0",
-  "private": true,
+  "private": false,
   "description": "QuickStrike desktop app powered by Electron",
+  "author": "QuickStrike",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
-    "desktop:start": "electron ."
+    "desktop:start": "electron .",
+    "build": "node scripts/build.js",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
   },
   "devDependencies": {
-    "electron": "^34.0.0"
+    "electron": "^34.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "@stoqey/ibkr": "^2.5.8"
+  },
+  "build": {
+    "appId": "com.quickstrike.desktop",
+    "productName": "QuickStrike",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "lib/**/*",
+      "config/**/*",
+      "index.html",
+      "LICENSE",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.finance"
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office"
+    }
   }
 }

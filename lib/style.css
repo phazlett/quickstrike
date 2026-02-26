@@ -4,12 +4,19 @@ body {
   font-family: system-ui, sans-serif;
   background: #0f1117;
   color: #e2e8f0;
-  padding: 2rem;
-  max-width: 760px;
+  padding: 0.5rem;
+  max-width: 700px;
   margin: 0 auto;
 }
 
 h2 { margin-bottom: 1rem; font-size: 1.1rem; color: #94a3b8; letter-spacing: .05em; }
+
+.config-version {
+  margin-top: -.6rem;
+  margin-bottom: .75rem;
+  font-size: .78rem;
+  color: #64748b;
+}
 
 section {
   background: #1e2230;
@@ -137,6 +144,54 @@ button:hover { background: #4f46e5; }
 
 #status-message {
   margin-bottom: 2rem;
+}
+
+.config-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .5rem;
+  margin-bottom: .85rem;
+}
+
+.config-controls label {
+  margin-top: .15rem;
+}
+
+.config-broker-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .5rem;
+}
+
+.config-note {
+  font-size: .8rem;
+  line-height: 1.35;
+  color: #93c5fd;
+  background: #1e3a5f;
+  border: 1px solid #2d3348;
+  border-radius: 4px;
+  padding: .45rem .55rem;
+}
+
+.config-note-list {
+  margin-top: .35rem;
+  margin-left: 1rem;
+  display: grid;
+  gap: .2rem;
+}
+
+#btn-save-config {
+  justify-self: start;
+  background: transparent;
+  border: 1px solid #2d3348;
+  color: #94a3b8;
+  padding: .4rem .75rem;
+}
+
+#btn-save-config:hover {
+  border-color: #6366f1;
+  color: #e2e8f0;
+  background: transparent;
 }
 
 pre {

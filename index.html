@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>QuickStrike for TastyTrade</title>
+  <title>QuickStrike</title>
   <link rel="stylesheet" href="lib/style.css" />
   <link rel="icon" href="data:,">
 </head>
@@ -57,8 +57,56 @@
 
   <!-- ── CONFIGURATION ── -->
   <section id="config-section">
-    <h2>QuickStrike for TastyTrade</h2>
-    <button id="btn-connect">Login with TastyTrade</button>
+    <h2>QuickStrike Configuration</h2>
+    <div id="config-version" class="config-version hidden"></div>
+    <div class="config-controls">
+      <label for="config-adapter-select">Broker</label>
+      <select id="config-adapter-select">
+        <option value="ibkr">Interactive Brokers</option>
+        <option value="tastytrade">TastyTrade</option>
+      </select>
+
+      <label for="config-env-select">Trading Mode</label>
+      <select id="config-env-select">
+        <option value="sandbox">Sandbox (Paper Trading)</option>
+        <option value="live">Live</option>
+      </select>
+
+      <div id="config-ibkr-fields" class="config-broker-fields hidden">
+        <label for="config-ibkr-platform-select">Host</label>
+        <select id="config-ibkr-platform-select">
+          <option value="tws">Trader Workstation (TWS)</option>
+          <option value="gateway">IB Gateway</option>
+        </select>
+
+        <label for="config-ibkr-ip-input">Host IP Address</label>
+        <input id="config-ibkr-ip-input" type="text" autocomplete="off" spellcheck="false" value="127.0.0.1" placeholder="127.0.0.1" />
+
+        <div class="config-note" id="config-ibkr-tws-prereq">
+          <strong>TWS API Prerequisites</strong>
+          <ul class="config-note-list">
+            <li id="config-ibkr-api-settings-path">Global Configuration → API → Settings</li>
+            <li id="config-ibkr-activex-item">Check <strong>Enable ActiveX and Socket</strong></li>
+            <li>Uncheck <strong>Read-Only API</strong></li>
+            <li>Set Socket Port to <strong id="config-ibkr-socket-port">7496</strong></li>
+            <li>Check <strong>Allow connections from localhost only</strong></li>
+          </ul>
+        </div>
+      </div>
+
+      <div id="config-tastytrade-fields" class="config-broker-fields hidden">
+        <label for="config-client-id-input">Client ID</label>
+        <input id="config-client-id-input" type="password" autocomplete="off" spellcheck="false" />
+
+        <label for="config-client-secret-input">Client Secret</label>
+        <input id="config-client-secret-input" type="password" autocomplete="off" spellcheck="false" />
+
+        <div class="config-note" id="tastytrade-redirect-note">
+          IMPORTANT: When setting up your TastyTrade OAuth application, be sure to use <strong>http://localhost:5500</strong> as your redirect URL.
+        </div>
+      </div>
+    </div>
+    <button id="btn-connect">Login</button>
   </section>
 
   <!-- ── TRADING ── (hidden until authenticated) -->
@@ -145,9 +193,14 @@
   <script src="lib/positions-manager.js"></script>
   <script src="lib/api-client.js"></script>
   <script src="lib/tastytrade-adapter.js"></script>
+  <script src="lib/ibkr-adapter.js"></script>
   <script src="lib/tastytrade-market-data-manager.js"></script>
   <script src="lib/auth-manager.js"></script>
   <script src="lib/bootstrap-manager.js"></script>
+  <script src="lib/ibkr-bootstrap-manager.js"></script>
+  <script src="lib/toast-manager.js"></script>
+  <script src="lib/settings-controller.js"></script>
+  <script src="lib/option-chain-controller.js"></script>
   <script src="lib/app.js"></script>
 </body>
 
