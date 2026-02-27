@@ -5,7 +5,9 @@ Currently supported trading plaform APIs are
 - Interactive Brokers (Trader Workstation and IB Gateway)
 - TastyTrade
 
-![QuickStrike screenshot](screenshot.png)
+![QuickStrike IBKR Configuration](screenshot-1.png)
+![QuickStrike TasthTrade Configuration](screenshot-2.png)
+![QuickStrike Main Screen](screenshot-3.png)
 
 ## Features
 
