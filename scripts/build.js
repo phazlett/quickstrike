@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 const { spawnSync } = require('node:child_process');
+const { existsSync } = require('node:fs');
+const path = require('node:path');
 
 const rawArgs = process.argv.slice(2);
 const disableCleanup = rawArgs.includes('--no-cleanup');
@@ -32,13 +34,22 @@ if (!platformFlags) {
   process.exit(1);
 }
 
-const args = ['electron-builder', ...platformFlags, ...passthroughFlags];
+const electronBuilderBin = process.platform === 'win32'
+  ? path.join('node_modules', '.bin', 'electron-builder.cmd')
+  : path.join('node_modules', '.bin', 'electron-builder');
 
-console.log(`[build] Running: npx ${args.join(' ')}`);
+if (!existsSync(electronBuilderBin)) {
+  console.error('[build] Local electron-builder not found in node_modules. Run: npm install');
+  process.exit(1);
+}
 
-const result = spawnSync('npx', args, {
+const args = [...platformFlags, ...passthroughFlags];
+
+console.log(`[build] Running: ${electronBuilderBin} ${args.join(' ')}`);
+
+const result = spawnSync(electronBuilderBin, args, {
   stdio: 'inherit',
-  shell: process.platform === 'win32',
+  shell: false,
 });
 
 if (typeof result.status === 'number') {

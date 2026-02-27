@@ -15,13 +15,14 @@
     "dist:linux": "electron-builder --linux"
   },
   "devDependencies": {
-    "electron": "^34.0.0",
+    "electron": "34.0.0",
     "electron-builder": "^24.13.3"
   },
   "dependencies": {
     "@stoqey/ibkr": "^2.5.8"
   },
   "build": {
+    "electronVersion": "34.0.0",
     "appId": "com.quickstrike.desktop",
     "productName": "QuickStrike",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
