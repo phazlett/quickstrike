@@ -1,6 +1,6 @@
 {
   "name": "quickstrike-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": false,
   "description": "QuickStrike desktop app powered by Electron",
   "author": "QuickStrike",
