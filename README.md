@@ -24,7 +24,7 @@ Currently supported trading plaform APIs are
 - Start in paper mode first and verify behavior before enabling live trading.
 
 ## Using with Interactive Brokers
-> You can use either Trader Workstation or IB Gateway. The start screen displays a lisst of prerequisites for required settings in IBKR. Pay close attention to these settings and configure your IBKR settings as noted.
+> You can use either Trader Workstation or IB Gateway. The start screen displays a list of prerequisites to configure in IBKR settings. Pay close attention to these settings and configure your IBKR platform as noted.
 >
 > IBKR must be running and logged in before using this app.
 >
@@ -32,7 +32,7 @@ Currently supported trading plaform APIs are
 
 ## Using with TastyTrade
 
-> The application supports the TastyTrade live trading environment and the sandbox environment. The sandbox environment allows you to use the app without submitting real orders. Each environment requires its own credentials. Put TastyTrade credentials in `config/adapters/tastytrade.config.js`.
+> The application supports the TastyTrade live trading environment and the sandbox (paper) environment. The sandbox environment allows you to use the app without submitting real orders. Each environment requires its own credentials. Put TastyTrade credentials in `config/adapters/tastytrade.config.js`.
 >
 >To create OAuth credentials for both Sandbox and Live environments, follow the official TastyTrade instructions:
 >
@@ -40,21 +40,31 @@ Currently supported trading plaform APIs are
 >
 >**IMPORTANT**
 >
->When setting up your TastyTrade OAuth app, you will see a setting called "Redirect URL". Use http://localhost:5500 for this.
+>When setting up your TastyTrade OAuth app, you will see a setting called "Redirect URL". Use **http://localhost:5500** for this.
 
-## Command Line Statup
+# Installation from Prebuilt Distributables
 
+The easiest way to get the app running is to download a pre-built distributable from the Github repo. Please not that these distributions are not digitally signed and Mac and Windows users will see a warning noting this. If you are unsure of the safety of this app then do not use the prebuilt distributables.
+
+# Installation from Source Code
+
+To run the application directly from source code you will need **npm** installed on your computer.
+1. Download the repo to your local machine
+2. Open a shell window and change to the source directory
+3. Install npm if not already installed. Get it from the [npm website](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm).
 ```bash
 npm install
+```
+4. Launch the application
+```bash
 npm start
 ```
 
 ## Build installers for distribution
 
-QuickStrike can be packaged as installable desktop apps (DMG/ZIP for macOS, NSIS installer for Windows, AppImage for Linux).
+QuickStrike can be packaged as installable desktop apps (DMG/ZIP for macOS, NSIS installer for Windows, AppImage for Linux). To build for a specific platform, the build process should be run on that actual platform. In other words, to build for Apple silicon, you must be using an Apple silicon device when building.
 
 ```bash
-npm install
 npm run build
 ```
 
