@@ -77,7 +77,7 @@ function startStaticServer() {
 function createMainWindow() {
   const win = new BrowserWindow({
     width: 980,
-    height: 900,
+    height: 1024,
     minWidth: 900,
     minHeight: 760,
     autoHideMenuBar: true,
