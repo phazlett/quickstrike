@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /*
   Interactive Brokers adapter credentials/settings scaffold.
   Populate this when IBKR adapter support is enabled.

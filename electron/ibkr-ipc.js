@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 const ibkr = require('@stoqey/ibkr').default;
 const { IBKRConnection, MarketDataManager, Portfolios, Orders, AccountSummary } = require('@stoqey/ibkr');
 const { IBApiTickType, OrderType, SecType } = require('@stoqey/ib');

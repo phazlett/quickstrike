@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 const { contextBridge, ipcRenderer } = require('electron');
 
 function createListener(channel) {

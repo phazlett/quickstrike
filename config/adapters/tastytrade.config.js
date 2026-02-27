@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /*
   TastyTrade adapter credentials.
   Keep sandbox and live credentials here.
