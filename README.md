@@ -1,7 +1,7 @@
 # QuickStrike
-Allows you to trade SPY and XSP options using streamlined interfaces. No prompts. No complexity. Just fast trade executions. QuickStrike is a lightweight browser app for fast options execution. The application leverages a data abstraction layer, allowing more broker API to be integrated. The application features OAuth authentication, live quote streaming, option-chain selection, buying-power reduction estimates, and positions management. You can enter and exit any SPY or XSP option position without any prompts for confirmations. A trade can be opened and closed in mere seconds.
+Allows you to trade SPY and XSP options using streamlined interfaces. No prompts. No complexity. Just fast trade executions. QuickStrike is a lightweight Electron.js app for fast market order executions on SPY and XSP options. The application leverages a data abstraction layer, allowing more broker API services to be integrated. The application features OAuth authentication, live quote streaming, option-chain selection, buying-power reduction estimates, and positions management. You can enter and exit any SPY or XSP option position without any prompts for confirmations. A trade can be opened and closed in mere seconds and you can fully monitor your positions using the app or your broker's trading platform.
 
-Currently supported trading plaform APIs are
+Currently supported trading plaform APIs include:
 - Interactive Brokers (Trader Workstation and IB Gateway)
 - TastyTrade
 
@@ -44,7 +44,7 @@ Currently supported trading plaform APIs are
 
 # Installation from Prebuilt Distributables
 
-The easiest way to get the app running is to download a pre-built distributable from the Github repo. Please not that these distributions are not digitally signed and Mac and Windows users will see a warning noting this. If you are unsure of the safety of this app then do not use the prebuilt distributables.
+The easiest way to get the app running is to [download a pre-built distributable](https://github.com/phazlett/quickstrike/tags) from the Github repo. Please note that these distributions are not digitally signed and Mac and Windows users may see a warning noting this. If you are unsure of the safety of this app then do not use the prebuilt distributables.
 
 # Installation from Source Code
 
