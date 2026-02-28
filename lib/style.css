@@ -150,7 +150,7 @@ button:hover { background: #4f46e5; }
 
 .trading-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns: 450px minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
@@ -698,21 +698,27 @@ header {
 
 .execution-toolbar-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: .28rem;
-  align-items: center;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .45rem .6rem;
+  align-items: start;
+}
+
+.execution-toolbar-field {
+  display: flex;
+  flex-direction: column;
+  gap: .18rem;
 }
 
 .execution-toolbar-grid label {
   font-size: .74rem;
   color: #64748b;
-  margin-top: .18rem;
 }
 
 .execution-toolbar-grid select {
   padding: .32rem .45rem;
   font-size: .78rem;
   background: #0f1117;
+  width: 100%;
 }
 
 .execution-status {
@@ -751,6 +757,37 @@ header {
 .execution-status-cancel:hover {
   border-color: #fca5a5;
   background: transparent;
+}
+
+#orders-section {
+  margin-top: .5rem;
+}
+
+.orders-card-wrap {
+  overflow: hidden;
+}
+
+.orders-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
+  padding: .55rem .7rem;
+  min-height: 2.25rem;
+}
+
+.orders-status-message {
+  min-width: 0;
+  color: #94a3b8;
+  font-size: .85rem;
+}
+
+.orders-status.orders-status-active .orders-status-message {
+  color: #93c5fd;
+}
+
+.orders-status.orders-status-error .orders-status-message {
+  color: #fca5a5;
 }
 
 .execution-info-overlay {
@@ -879,7 +916,7 @@ header {
 
 .staged-card-layout {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: .75rem;
   align-items: start;
 }
@@ -896,10 +933,22 @@ header {
 }
 
 .staged-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
   font-size: .75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .08em;
+}
+
+.staged-card-title {
+  min-width: 0;
+}
+
+.staged-card-submit {
+  margin-left: auto;
 }
 
 .call-header { color: #93c5fd; }
@@ -954,10 +1003,15 @@ header {
   margin-top: 1.25rem;
 }
 
+.trading-right-column #positions-section {
+  margin-top: .5rem;
+}
+
 .positions-table-wrap {
   border: 1px solid #2d3348;
   border-radius: 6px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   background: #151822;
 }
 

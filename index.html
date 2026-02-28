@@ -52,6 +52,7 @@
     <div class="header-right">
       <button id="btn-logout">Logout</button>
       <div id="live-connection" class="live-connection disconnected">DISCONNECTED</div>
+      <div id="env-badge"></div>
     </div>
   </header>
 
@@ -126,42 +127,40 @@
 
         <!-- ── Order Panel ── -->
         <div id="order-section">
-          <div id="env-badge"></div>
-
           <div class="staged-orders">
 
             <!-- Call Order -->
             <div class="staged-card" id="call-card">
-              <div class="staged-card-header call-header">Call</div>
+              <div class="staged-card-header call-header">
+                <span class="staged-card-title">Call</span>
+                <button class="btn-disabled staged-card-submit" id="btn-submit-call" disabled>Submit</button>
+              </div>
               <div class="staged-card-layout">
                 <div class="staged-card-fields">
-                  <div class="staged-symbol" id="call-symbol">No call selected</div>
                   <div class="staged-action" id="call-action"></div>
+                  <div class="staged-symbol" id="call-symbol">--</div>
                   <div class="bp-impact-row">
                     <span class="bp-label">BPR</span>
                     <span class="bp-value" id="call-bp-reduction">--</span>
                   </div>
-                </div>
-                <div>
-                  <button class="btn-disabled" id="btn-submit-call" disabled>Submit</button>
                 </div>
               </div>
             </div>
 
             <!-- Put Order -->
             <div class="staged-card" id="put-card">
-              <div class="staged-card-header put-header">Put</div>
+              <div class="staged-card-header put-header">
+                <span class="staged-card-title">Put</span>
+                <button class="btn-disabled staged-card-submit" id="btn-submit-put" disabled>Submit</button>
+              </div>
               <div class="staged-card-layout">
                 <div class="staged-card-fields">
-                  <div class="staged-symbol" id="put-symbol">No put selected</div>
                   <div class="staged-action" id="put-action"></div>
+                  <div class="staged-symbol" id="put-symbol">--</div>
                   <div class="bp-impact-row">
                     <span class="bp-label">BPR</span>
                     <span class="bp-value" id="put-bp-reduction">--</span>
                   </div>
-                </div>
-                <div>
-                  <button class="btn-disabled" id="btn-submit-put" disabled>Submit</button>
                 </div>
               </div>
             </div>
@@ -170,27 +169,6 @@
 
         </div>
 
-        <div id="positions-section">
-          <h2>Positions</h2>
-          <div class="positions-table-wrap">
-            <table class="positions-table">
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Quantity</th>
-                  <th>Expiration</th>
-                  <th>Strike</th>
-                  <th>P/L</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="positions-rows"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div class="trading-right-column">
         <div id="tastytrade-execution-toolbar" class="execution-toolbar hidden">
           <div class="execution-toolbar-header">
             <div class="execution-toolbar-title">Execution</div>
@@ -202,63 +180,102 @@
             <button id="exec-preset-aggressive" class="execution-preset-btn" type="button">Aggressive</button>
           </div>
           <div class="execution-toolbar-grid">
-            <label for="exec-attempts">Attempts</label>
-            <select id="exec-attempts">
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4" selected>4</option>
-              <option value="5">5</option>
-              <option value="6">6</option>
-            </select>
+            <div class="execution-toolbar-field">
+              <label for="exec-attempts">Attempts</label>
+              <select id="exec-attempts">
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4" selected>4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+              </select>
+            </div>
 
-            <label for="exec-step-cents">Step (¢)</label>
-            <select id="exec-step-cents">
-              <option value="1" selected>1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="5">5</option>
-            </select>
+            <div class="execution-toolbar-field">
+              <label for="exec-step-cents">Step (¢)</label>
+              <select id="exec-step-cents">
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="5">5</option>
+              </select>
+            </div>
 
-            <label for="exec-max-slippage-cents">Max Slip (¢)</label>
-            <select id="exec-max-slippage-cents">
-              <option value="3">3</option>
-              <option value="5" selected>5</option>
-              <option value="8">8</option>
-              <option value="10">10</option>
-              <option value="15">15</option>
-            </select>
+            <div class="execution-toolbar-field">
+              <label for="exec-max-slippage-cents">Max Slip (¢)</label>
+              <select id="exec-max-slippage-cents">
+                <option value="3">3</option>
+                <option value="5" selected>5</option>
+                <option value="8">8</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+              </select>
+            </div>
 
-            <label for="exec-fill-timeout-ms">Fill Wait (ms)</label>
-            <select id="exec-fill-timeout-ms">
-              <option value="1000">1000</option>
-              <option value="1500">1500</option>
-              <option value="2000" selected>2000</option>
-              <option value="3000">3000</option>
-              <option value="4000">4000</option>
-            </select>
+            <div class="execution-toolbar-field">
+              <label for="exec-fill-timeout-ms">Fill Wait (ms)</label>
+              <select id="exec-fill-timeout-ms">
+                <option value="1000">1000</option>
+                <option value="1500">1500</option>
+                <option value="2000" selected>2000</option>
+                <option value="3000">3000</option>
+                <option value="4000">4000</option>
+              </select>
+            </div>
 
-            <label for="exec-initial-price-mode">Initial Price</label>
-            <select id="exec-initial-price-mode">
-              <option value="midpoint" selected>Midpoint</option>
-              <option value="natural">Natural (Long=Bid, Short=Ask)</option>
-            </select>
+            <div class="execution-toolbar-field">
+              <label for="exec-initial-price-mode">Initial Price</label>
+              <select id="exec-initial-price-mode">
+                <option value="midpoint" selected>Midpoint</option>
+                <option value="natural">Natural (Long=Bid, Short=Ask)</option>
+              </select>
+            </div>
 
-            <label for="exec-initial-offset-cents">Natural Offset (¢)</label>
-            <select id="exec-initial-offset-cents">
-              <option value="0" selected>0</option>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="5">5</option>
-              <option value="8">8</option>
-              <option value="10">10</option>
-              <option value="15">15</option>
-              <option value="20">20</option>
-            </select>
+            <div class="execution-toolbar-field">
+              <label for="exec-initial-offset-cents">Natural Offset (¢)</label>
+              <select id="exec-initial-offset-cents">
+                <option value="0" selected>0</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="5">5</option>
+                <option value="8">8</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+              </select>
+            </div>
           </div>
-          <div id="exec-status-toolbar" class="execution-status hidden" aria-live="polite">
-            <span id="exec-status-message" class="execution-status-message"></span>
-            <button id="exec-status-cancel" class="execution-status-cancel hidden" type="button">Cancel</button>
+        </div>
+      </div>
+
+      <div class="trading-right-column">
+        <div id="orders-section">
+          <h2>Orders</h2>
+          <div class="positions-table-wrap orders-card-wrap">
+            <div id="exec-status-toolbar" class="orders-status" aria-live="polite">
+              <span id="exec-status-message" class="orders-status-message">No active orders</span>
+              <button id="exec-status-cancel" class="execution-status-cancel hidden" type="button">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="positions-section">
+          <h2>Open Positions</h2>
+          <div class="positions-table-wrap">
+            <table class="positions-table">
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Qty</th>
+                  <th>Exp</th>
+                  <th>Strike</th>
+                  <th>P/L</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="positions-rows"></tbody>
+            </table>
           </div>
         </div>
       </div>
