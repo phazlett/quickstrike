@@ -114,78 +114,212 @@
 
     <div id="status-message" class="status"></div>
 
-    <!-- ── Option Chain Display ── -->
-    <div id="chain-section" class="hidden">
-      <div id="chain-grid" class="chain-grid">
-        <div id="chain-rows"></div>
-      </div>
-    </div>
+    <div class="trading-layout">
+      <div class="trading-left-column">
 
-    <!-- ── Order Panel ── -->
-    <div id="order-section">
-      <div id="env-badge"></div>
-
-      <div class="staged-orders">
-
-        <!-- Call Order -->
-        <div class="staged-card" id="call-card">
-          <div class="staged-card-header call-header">Call</div>
-          <div class="staged-card-layout">
-            <div class="staged-card-fields">
-              <div class="staged-symbol" id="call-symbol">No call selected</div>
-              <div class="staged-action" id="call-action"></div>
-              <div class="bp-impact-row">
-                <span class="bp-label">BPR</span>
-                <span class="bp-value" id="call-bp-reduction">--</span>
-              </div>
-            </div>
-            <div>
-              <button class="btn-disabled" id="btn-submit-call" disabled>Submit</button>
-            </div>
+        <!-- ── Option Chain Display ── -->
+        <div id="chain-section" class="hidden">
+          <div id="chain-grid" class="chain-grid">
+            <div id="chain-rows"></div>
           </div>
         </div>
 
-        <!-- Put Order -->
-        <div class="staged-card" id="put-card">
-          <div class="staged-card-header put-header">Put</div>
-          <div class="staged-card-layout">
-            <div class="staged-card-fields">
-              <div class="staged-symbol" id="put-symbol">No put selected</div>
-              <div class="staged-action" id="put-action"></div>
-              <div class="bp-impact-row">
-                <span class="bp-label">BPR</span>
-                <span class="bp-value" id="put-bp-reduction">--</span>
+        <!-- ── Order Panel ── -->
+        <div id="order-section">
+          <div id="env-badge"></div>
+
+          <div class="staged-orders">
+
+            <!-- Call Order -->
+            <div class="staged-card" id="call-card">
+              <div class="staged-card-header call-header">Call</div>
+              <div class="staged-card-layout">
+                <div class="staged-card-fields">
+                  <div class="staged-symbol" id="call-symbol">No call selected</div>
+                  <div class="staged-action" id="call-action"></div>
+                  <div class="bp-impact-row">
+                    <span class="bp-label">BPR</span>
+                    <span class="bp-value" id="call-bp-reduction">--</span>
+                  </div>
+                </div>
+                <div>
+                  <button class="btn-disabled" id="btn-submit-call" disabled>Submit</button>
+                </div>
               </div>
             </div>
-            <div>
-              <button class="btn-disabled" id="btn-submit-put" disabled>Submit</button>
+
+            <!-- Put Order -->
+            <div class="staged-card" id="put-card">
+              <div class="staged-card-header put-header">Put</div>
+              <div class="staged-card-layout">
+                <div class="staged-card-fields">
+                  <div class="staged-symbol" id="put-symbol">No put selected</div>
+                  <div class="staged-action" id="put-action"></div>
+                  <div class="bp-impact-row">
+                    <span class="bp-label">BPR</span>
+                    <span class="bp-value" id="put-bp-reduction">--</span>
+                  </div>
+                </div>
+                <div>
+                  <button class="btn-disabled" id="btn-submit-put" disabled>Submit</button>
+                </div>
+              </div>
             </div>
+
           </div>
+
         </div>
 
+        <div id="positions-section">
+          <h2>Positions</h2>
+          <div class="positions-table-wrap">
+            <table class="positions-table">
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Quantity</th>
+                  <th>Expiration</th>
+                  <th>Strike</th>
+                  <th>P/L</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="positions-rows"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
-    </div>
+      <div class="trading-right-column">
+        <div id="tastytrade-execution-toolbar" class="execution-toolbar hidden">
+          <div class="execution-toolbar-header">
+            <div class="execution-toolbar-title">Execution</div>
+            <button id="exec-info-link" class="execution-info-link" type="button">Info</button>
+          </div>
+          <div class="execution-presets" role="group" aria-label="Execution presets">
+            <button id="exec-preset-conservative" class="execution-preset-btn" type="button">Conservative</button>
+            <button id="exec-preset-balanced" class="execution-preset-btn" type="button">Balanced</button>
+            <button id="exec-preset-aggressive" class="execution-preset-btn" type="button">Aggressive</button>
+          </div>
+          <div class="execution-toolbar-grid">
+            <label for="exec-attempts">Attempts</label>
+            <select id="exec-attempts">
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4" selected>4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+            </select>
 
-    <div id="positions-section">
-      <h2>Positions</h2>
-      <div class="positions-table-wrap">
-        <table class="positions-table">
-          <thead>
-            <tr>
-              <th>Symbol</th>
-              <th>Quantity</th>
-              <th>Expiration</th>
-              <th>Strike</th>
-              <th>P/L</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="positions-rows"></tbody>
-        </table>
+            <label for="exec-step-cents">Step (¢)</label>
+            <select id="exec-step-cents">
+              <option value="1" selected>1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="5">5</option>
+            </select>
+
+            <label for="exec-max-slippage-cents">Max Slip (¢)</label>
+            <select id="exec-max-slippage-cents">
+              <option value="3">3</option>
+              <option value="5" selected>5</option>
+              <option value="8">8</option>
+              <option value="10">10</option>
+              <option value="15">15</option>
+            </select>
+
+            <label for="exec-fill-timeout-ms">Fill Wait (ms)</label>
+            <select id="exec-fill-timeout-ms">
+              <option value="1000">1000</option>
+              <option value="1500">1500</option>
+              <option value="2000" selected>2000</option>
+              <option value="3000">3000</option>
+              <option value="4000">4000</option>
+            </select>
+
+            <label for="exec-initial-price-mode">Initial Price</label>
+            <select id="exec-initial-price-mode">
+              <option value="midpoint" selected>Midpoint</option>
+              <option value="natural">Natural (Long=Bid, Short=Ask)</option>
+            </select>
+
+            <label for="exec-initial-offset-cents">Natural Offset (¢)</label>
+            <select id="exec-initial-offset-cents">
+              <option value="0" selected>0</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="5">5</option>
+              <option value="8">8</option>
+              <option value="10">10</option>
+              <option value="15">15</option>
+              <option value="20">20</option>
+            </select>
+          </div>
+          <div id="exec-status-toolbar" class="execution-status hidden" aria-live="polite">
+            <span id="exec-status-message" class="execution-status-message"></span>
+            <button id="exec-status-cancel" class="execution-status-cancel hidden" type="button">Cancel</button>
+          </div>
+        </div>
       </div>
     </div>
   </section>
+
+  <div id="execution-info-overlay" class="execution-info-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="execution-info-title">
+    <div class="execution-info-card">
+      <div class="execution-info-header">
+        <h3 id="execution-info-title">Execution Controls</h3>
+        <button id="execution-info-close" class="execution-info-close" type="button">Close</button>
+      </div>
+      <div class="execution-info-content">
+        <p>These controls tune how QuickStrike submits and reprices TastyTrade opening orders which might help you get
+          filled at a better price. TastyTrade is a pay-for-order-flow (PFOF) broker, which means orders are routed to
+          market makers for execution and the fill price is usually not what you expected.</p>
+        <div class="execution-info-grid" role="table" aria-label="Execution control details">
+          <div class="execution-info-row" role="row">
+            <div class="execution-info-key" role="rowheader">Presets</div>
+            <div class="execution-info-value" role="cell">Preset profiles. Conservative is least aggressive, Aggressive chases fastest.</div>
+          </div>
+          <div class="execution-info-row" role="row">
+            <div class="execution-info-key" role="rowheader">Attempts</div>
+            <div class="execution-info-value" role="cell">Max number of limit order submissions before stopping.</div>
+          </div>
+          <div class="execution-info-row" role="row">
+            <div class="execution-info-key" role="rowheader">Step (¢)</div>
+            <div class="execution-info-value" role="cell">Price adjustment per chase attempt.</div>
+          </div>
+          <div class="execution-info-row" role="row">
+            <div class="execution-info-key" role="rowheader">Max Slip (¢)</div>
+            <div class="execution-info-value" role="cell">Farthest allowed move from the initial submitted price.</div>
+          </div>
+          <div class="execution-info-row" role="row">
+            <div class="execution-info-key" role="rowheader">Fill Wait (ms)</div>
+            <div class="execution-info-value" role="cell">How long to wait between each submit and fill reconciliation.</div>
+          </div>
+          <div class="execution-info-row" role="row">
+            <div class="execution-info-key" role="rowheader">Initial Price</div>
+            <div class="execution-info-value" role="cell">
+              <p>Midpoint or natural side pricing. When Natural is selected:</p>
+              <ul>
+                <li>Long orders = Initial limit order price is the Bid</li>
+                <li>Short orders = Initial limit order price is the Ask</li>
+              </ul>
+            </div>
+          </div>
+          <div class="execution-info-row" role="row">
+            <div class="execution-info-key" role="rowheader">Natural Offset (¢)</div>
+            <div class="execution-info-value" role="cell">
+              <p>Used only when Initial Price is set to Natural.</p>
+              <ul>
+                <li>Long orders = Bid - offset</li>
+                <li>Short orders = Ask + offset</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="config/adapters/tastytrade.config.js"></script>
   <script src="config/adapters/ibkr.config.js"></script>
