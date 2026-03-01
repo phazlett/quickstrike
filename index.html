@@ -250,16 +250,6 @@
       </div>
 
       <div class="trading-right-column">
-        <div id="orders-section">
-          <h2>Orders</h2>
-          <div class="positions-table-wrap orders-card-wrap">
-            <div id="exec-status-toolbar" class="orders-status" aria-live="polite">
-              <span id="exec-status-message" class="orders-status-message">No active orders</span>
-              <button id="exec-status-cancel" class="execution-status-cancel hidden" type="button">Cancel</button>
-            </div>
-          </div>
-        </div>
-
         <div id="positions-section">
           <h2>Open Positions</h2>
           <div class="positions-table-wrap">
@@ -276,6 +266,15 @@
               </thead>
               <tbody id="positions-rows"></tbody>
             </table>
+          </div>
+        </div>
+        <div id="orders-section">
+          <h2>Order Log</h2>
+          <div class="positions-table-wrap orders-card-wrap">
+            <div id="exec-status-toolbar" class="orders-status" aria-live="polite">
+              <span id="exec-status-message" class="orders-status-message">No active orders</span>
+              <button id="exec-status-cancel" class="execution-status-cancel hidden" type="button">Cancel</button>
+            </div>
           </div>
         </div>
       </div>
