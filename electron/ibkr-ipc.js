@@ -278,6 +278,51 @@ function toQuotePayload({ eventSymbol, tickMap, isUnderlying }) {
   };
 }
 
+function safeUnsubscribe(subscription) {
+  try {
+    subscription?.unsubscribe?.();
+  } catch {
+    // no-op
+  }
+}
+
+function resetIbkrModuleSingletonState() {
+  const accountSummary = AccountSummary.Instance;
+  safeUnsubscribe(accountSummary?.GetAccountSummaryUpdates);
+  accountSummary.GetAccountSummaryUpdates = null;
+  accountSummary.ib = null;
+  accountSummary.accountSummary = {};
+
+  const portfolios = Portfolios.Instance;
+  safeUnsubscribe(portfolios?.GetPositions);
+  portfolios.GetPositions = null;
+  portfolios.ib = null;
+  portfolios.currentPortfolios?.clear?.();
+  portfolios.closedPositions?.clear?.();
+  portfolios.entryPrices?.clear?.();
+  portfolios.entryDates?.clear?.();
+
+  const orders = Orders.Instance;
+  safeUnsubscribe(orders?.GetOrders);
+  orders.GetOrders = null;
+  orders.ib = null;
+  orders.openOrders?.clear?.();
+  orders.cancelledOrders?.clear?.();
+  orders.completedTrades?.clear?.();
+  if (Array.isArray(orders.openOrderQueue)) {
+    orders.openOrderQueue.length = 0;
+  }
+
+  const marketDataManager = MarketDataManager.Instance;
+  marketDataManager.GetHistoricalDataUpdates?.forEach?.(subscription => safeUnsubscribe(subscription));
+  marketDataManager.GetHistoricalDataUpdates?.clear?.();
+  marketDataManager.GetTickByTickDataUpdates?.forEach?.(subscription => safeUnsubscribe(subscription));
+  marketDataManager.GetTickByTickDataUpdates?.clear?.();
+  marketDataManager.currentBarData?.clear?.();
+  marketDataManager.currentTickBarData?.clear?.();
+  marketDataManager.ib = null;
+}
+
 async function connectIbkr(settings = {}) {
   const host = `${settings?.host ?? '127.0.0.1'}`.trim() || '127.0.0.1';
   const port = Number.parseInt(settings?.port, 10);
@@ -294,7 +339,7 @@ async function connectIbkr(settings = {}) {
   process.env.IBKR_CLIENT_ID = Number.isFinite(clientId) ? `${clientId}` : '0';
 
   try {
-    await withTimeout(ibkr(), 15000, 'initializing IBKR bridge');
+    resetIbkrModuleSingletonState();
 
     const connected = await withTimeout(
       IBKRConnection.Instance.init({
@@ -356,12 +401,39 @@ function disconnectIbkr() {
   clearMarketDataSubscriptions();
   optionContractCache.clear();
   ibErrorLastSentAtByKey.clear();
+  resetIbkrModuleSingletonState();
+
+  const ibkrConnection = IBKRConnection.Instance;
 
   try {
-    IBKRConnection.Instance.disconnect();
+    ibkrConnection.disconnect();
   } catch {
     // no-op
   }
+
+  try {
+    ibkrConnection.ib?.disconnect?.();
+  } catch {
+    // no-op
+  }
+
+  try {
+    ibkrConnection.errors?.unsubscribe?.();
+  } catch {
+    // no-op
+  }
+
+  try {
+    ibkrConnection.connection?.unsubscribe?.();
+  } catch {
+    // no-op
+  }
+
+  ibkrConnection.errors = null;
+  ibkrConnection.connection = null;
+  ibkrConnection.connectionState = null;
+  ibkrConnection.ibApiNext = null;
+  ibkrConnection.connected = false;
 
   isConnected = false;
   emitToRenderer('ibkr:connectionState', { isLive: false });
