@@ -237,8 +237,17 @@ header {
   margin-bottom: 0.5rem;
 }
 
-.badge-sandbox    { color: #fbbf24; font-weight: 600; font-size: .9rem; }
-.badge-production { color: #f87171; font-weight: 600; font-size: .9rem; }
+.live-connection.env.badge-sandbox {
+    color: #ffe0ab;
+    border-color: #cf7c00;
+    background: #cf7c00;
+}
+
+.live-connection.env.badge-production {
+  color: #fca5a5;
+  border-color: #450a0a;
+  background: #450a0a;
+}
 
 .btn-long {
   background: #15803d;
@@ -381,7 +390,7 @@ header {
 }
 
 #env-badge {
-  font-size: .8rem;
+  font-size: .72rem;
 }
 
 .chain-row {
