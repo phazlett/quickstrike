@@ -55,7 +55,6 @@ input, select {
   border-radius: 4px;
   color: #e2e8f0;
   padding: .5rem .75rem;
-  font-size: .95rem;
 }
 input:focus, select:focus { outline: none; border-color: #6366f1; }
 
@@ -285,9 +284,6 @@ header {
 }
 
 .header-inputs select {
-  padding: .4rem .6rem;
-  font-size: 1rem;
-  font-weight: 600;
   background: #0f1117;
   border: 1px solid #2d3348;
   border-radius: 4px;
@@ -295,7 +291,6 @@ header {
 }
 
 #quantity {
-  width: 65px;
   text-align: center;
 }
 
@@ -310,10 +305,7 @@ header {
   color: #94a3b8;
   padding: .4rem .9rem;
   border-radius: 4px;
-  font-size: .95rem;
-  font-weight: 600;
   cursor: pointer;
-  letter-spacing: .03em;
 }
 
 .symbol-btn:hover  { border-color: #6366f1; color: #e2e8f0; }
@@ -363,7 +355,6 @@ header {
 
 .live-connection {
   font-size: .72rem;
-  font-weight: 700;
   letter-spacing: .06em;
   padding: .15rem .4rem;
   border-radius: 999px;
@@ -693,8 +684,6 @@ header {
   padding: .25rem .5rem;
   border-radius: 999px;
   font-size: .7rem;
-  font-weight: 600;
-  letter-spacing: .03em;
 }
 
 .execution-preset-btn:hover {
